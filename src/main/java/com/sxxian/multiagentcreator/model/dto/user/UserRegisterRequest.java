@@ -1,4 +1,4 @@
-package com.sxxian.multiagentcreator.model.vo;
+package com.sxxian.multiagentcreator.model.dto.user;
 
 import lombok.Data;
 
