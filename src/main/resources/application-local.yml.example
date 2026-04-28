@@ -1,0 +1,58 @@
+spring:
+  # Spring AI Alibaba 配置
+  ai:
+    alibaba:
+      dashscope:
+        api-key: your-dashscope-api-key  # 请在 https://bailian.console.aliyun.com/?apiKey=1&tab=api#/api 获取
+
+# Pexels API 配置
+pexels:
+  api-key: ${PEXELS_API_KEY:xxx}
+# Nano Banana (Gemini 原生图片生成) 配置
+nano-banana:
+  api-key: xxx  # 请在 https://aistudio.google.com/apikey 获取
+  model: gemini-3-pro-image-preview  # 可选: gemini-2.5-flash-image (快速), gemini-3-pro-image-preview (高质量)
+  aspect-ratio: "16:9"  # 可选，支持 1:1, 2:3, 3:2, 3:4, 4:3, 4:5, 5:4, 9:16, 16:9, 21:9
+  image-size: "1K"  # 可选（仅 gemini-3-pro 支持），支持 1K, 2K, 4K
+  output-mime-type: image/png  # 可选，支持 image/jpeg, image/png
+# Mermaid 图表生成配置
+mermaid:
+  cli-command: mmdc  # CLI 命令（Windows 下会自动使用 mmdc.cmd）
+  background-color: transparent  # 背景颜色
+  output-format: svg  # 输出格式（svg/png/pdf）
+  width: 1200  # 图片宽度（像素）
+  timeout: 30000  # 命令执行超时时间（毫秒）
+
+# Iconify 图标库配置
+iconify:
+  api-url: https://api.iconify.design
+  search-limit: 10
+  default-height: 64
+  default-color: ""  # 留空使用 currentColor，或设置如 "#000000"
+
+# 表情包图片检索配置
+emoji-pack:
+  search-url: https://cn.bing.com/images/async
+  suffix: 熊猫头表情包
+  timeout: 10000  # 请求超时（毫秒）
+
+# SVG 概念示意图生成配置
+svg-diagram:
+  default-width: 800
+  default-height: 600
+  folder: svg-diagrams  # COS 存储文件夹
+
+# Stripe 支付配置（测试模式）
+stripe:
+  api-key: sk_test_your_stripe_secret_key  # 请在 https://dashboard.stripe.com/test/apikeys 获取
+  webhook-secret: whsec_your_webhook_secret  # Webhook 签名密钥
+  success-url: http://localhost:5173/vip?success=true  # 支付成功回调 URL
+  cancel-url: http://localhost:5173/vip?cancelled=true  # 支付取消回调 URL
+
+# 腾讯云 COS 配置（可选，MVP 阶段可以不配置）
+tencent:
+  cos:
+    secret-id: your-secret-id
+    secret-key: your-secret-key
+    region: ap-guangzhou
+    bucket: your-bucket

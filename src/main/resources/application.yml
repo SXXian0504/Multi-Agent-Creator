@@ -1,0 +1,93 @@
+spring:
+  application:
+    name: multi-agent-creator
+  profiles:
+    active: local
+  # session 配置
+  session:
+    store-type: redis
+    # session 30 天过期
+    timeout: 2592000
+  # MySQL 数据库配置
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/multi-agent-creator
+    username: root
+    password: 123456
+  # Redis 配置
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      database: 0
+      password:
+mybatis-flex:
+  configuration:
+    map-underscore-to-camel-case: false
+server:
+  port: 8567
+  servlet:
+    context-path: /api
+    # cookie 30 天过期
+    session:
+      cookie:
+        max-age: 2592000
+# springdoc-openapi 配置
+springdoc:
+  group-configs:
+    - group: 'default'
+      paths-to-match: '/**'
+      packages-to-scan: com.yupi.template.controller
+# knife4j 接口文档配置
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
+
+# Pexels API 配置
+pexels:
+  api-key: ${PEXELS_API_KEY:xxx}
+# Nano Banana (Gemini 原生图片生成) 配置
+nano-banana:
+  api-key: xxx  # 请在 https://aistudio.google.com/apikey 获取
+  model: gemini-3-pro-image-preview  # 可选: gemini-2.5-flash-image (快速), gemini-3-pro-image-preview (高质量)
+  aspect-ratio: "16:9"  # 可选，支持 1:1, 2:3, 3:2, 3:4, 4:3, 4:5, 5:4, 9:16, 16:9, 21:9
+  image-size: "1K"  # 可选（仅 gemini-3-pro 支持），支持 1K, 2K, 4K
+  output-mime-type: image/png  # 可选，支持 image/jpeg, image/png
+# Mermaid 图表生成配置
+mermaid:
+  cli-command: mmdc  # CLI 命令（Windows 下会自动使用 mmdc.cmd）
+  background-color: transparent  # 背景颜色
+  output-format: svg  # 输出格式（svg/png/pdf）
+  width: 1200  # 图片宽度（像素）
+  timeout: 30000  # 命令执行超时时间（毫秒）
+
+# Iconify 图标库配置
+iconify:
+  api-url: https://api.iconify.design
+  search-limit: 10
+  default-height: 64
+  default-color: ""  # 留空使用 currentColor，或设置如 "#000000"
+
+# 表情包图片检索配置
+emoji-pack:
+  search-url: https://cn.bing.com/images/async
+  suffix: 熊猫头表情包
+  timeout: 10000  # 请求超时（毫秒）
+
+# SVG 概念示意图生成配置
+svg-diagram:
+  default-width: 800
+  default-height: 600
+  folder: svg-diagrams  # COS 存储文件夹
+
+# 文章智能体配置
+article:
+  agent:
+    orchestrator:
+      # 是否启用多智能体编排模式（支持配图并行生成）
+      # true: 使用 Spring AI Alibaba 多智能体编排
+      # false: 使用原有的 ArticleAgentService
+      enabled: true
+    # Agent 最大迭代次数
+    max-iterations: 10
