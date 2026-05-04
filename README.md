@@ -119,9 +119,8 @@ cp src/main/resources/application-local.yml.example src/main/resources/applicati
 # AI服务配置（必需）
 spring:
   ai:
-    alibaba:
-      dashscope:
-        api-key: your-dashscope-api-key  # 通义千问API
+    dashscope:
+      api-key: your-dashscope-api-key  # 通义千问API
 
 # 配图服务配置（必需）
 pexels:
@@ -158,7 +157,7 @@ mvn clean compile spring-boot:run
 mvn spring-boot:run -Dspring-boot.run.profiles=local
 ```
 
-API文档地址：http://localhost:8123/api/doc.html
+API文档地址：http://localhost:8567/api/doc.html
 
 ### 4. 启动前端服务
 
@@ -235,7 +234,7 @@ docker compose up -d --build
 ### 后端架构结构
 
 ```
-├── src/main/java/com/yupi/template/
+├── src/main/java/com/sxxian/multiagentcreator/
 │   ├── agent/                           # Multi-Agent核心模块
 │   │   ├── agents/                      # 专用智能体实现
 │   │   │   ├── TitleGeneratorAgent.java     # 标题生成智能体
@@ -312,7 +311,7 @@ docker compose up -d --build
 ### 前端架构结构
 
 ```
-├── frontend/
+├── multi-agent-creator/
 │   ├── src/
 │   │   ├── pages/                       # 页面组件
 │   │   │   ├── ArticleCreatePage.vue      # 文章创作页面
