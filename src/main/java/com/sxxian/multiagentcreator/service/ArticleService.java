@@ -2,6 +2,7 @@ package com.sxxian.multiagentcreator.service;
 
 import com.mybatisflex.core.paginate.Page;
 import com.mybatisflex.core.service.IService;
+import com.sxxian.multiagentcreator.model.dto.article.ArticleQueryRequest;
 import com.sxxian.multiagentcreator.model.dto.article.ArticleState;
 import com.sxxian.multiagentcreator.model.entity.Article;
 import com.sxxian.multiagentcreator.model.entity.User;

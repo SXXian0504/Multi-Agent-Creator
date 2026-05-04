@@ -9,6 +9,7 @@ import com.sxxian.multiagentcreator.exception.BusinessException;
 import com.sxxian.multiagentcreator.exception.ErrorCode;
 import com.sxxian.multiagentcreator.exception.ThrowUtils;
 import com.sxxian.multiagentcreator.mapper.ArticleMapper;
+import com.sxxian.multiagentcreator.model.dto.article.ArticleQueryRequest;
 import com.sxxian.multiagentcreator.model.dto.article.ArticleState;
 import com.sxxian.multiagentcreator.model.entity.Article;
 import com.sxxian.multiagentcreator.model.entity.User;
@@ -33,7 +34,6 @@ import static com.sxxian.multiagentcreator.constant.UserConstant.VIP_ROLE;
 /**
  * 文章服务实现类
  *
- * @author <a href="https://codefather.cn">编程导航学习圈</a>
  */
 @Service
 @Slf4j
