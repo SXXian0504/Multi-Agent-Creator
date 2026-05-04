@@ -1,0 +1,41 @@
+# ========================================
+# 前端 Docker 构建忽略文件
+# ========================================
+
+# 依赖
+node_modules/
+
+# 构建产物
+dist/
+build/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+.dockerignore
+
+# 文档
+README.md
+*.md
+
+# 日志
+logs/
+*.log
+
+# 测试
+**/*.test.*
+**/*.spec.*
+coverage/
+
+# 临时文件
+*.tmp
+.DS_Store
+*~

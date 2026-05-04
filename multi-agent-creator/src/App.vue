@@ -47,7 +47,7 @@ provide('locale', zhCN)
   /* 渐变 */
   --gradient-primary: linear-gradient(135deg, #22C55E 0%, #16A34A 100%);
   --gradient-hero: linear-gradient(180deg, #DCFCE7 0%, #FFFFFF 100%);
-  --gradient-hero-dark: linear-gradient(180deg, #166534 0%, #14532D 100%);
+  --gradient-hero-dark: linear-gradient(180deg, #8B4513 0%, #2D1810 100%);
 
   /* 纯色背景 */
   --bg-primary: #22C55E;
