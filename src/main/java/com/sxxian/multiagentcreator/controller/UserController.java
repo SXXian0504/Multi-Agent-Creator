@@ -30,6 +30,9 @@ public class UserController {
 
     /**
      * 用户注册
+     *
+     * @param userRegisterRequest 用户注册请求
+     * @return 注册结果
      */
     @PostMapping("/register")
     public BaseResponse<Long> userRegister(@RequestBody UserRegisterRequest userRegisterRequest) {
@@ -43,6 +46,10 @@ public class UserController {
 
     /**
      * 用户登录
+     *
+     * @param userLoginRequest 用户登录请求
+     * @param request          请求对象
+     * @return 脱敏后的用户登录信息
      */
     @PostMapping("/login")
     public BaseResponse<LoginUserVO> userLogin(@RequestBody UserLoginRequest userLoginRequest, HttpServletRequest request) {
@@ -53,9 +60,6 @@ public class UserController {
         return ResultUtils.success(loginUserVO);
     }
 
-    /**
-     * 获取当前登录用户
-     */
     @GetMapping("/get/login")
     public BaseResponse<LoginUserVO> getLoginUser(HttpServletRequest request) {
         User loginUser = userService.getLoginUser(request);
@@ -64,6 +68,9 @@ public class UserController {
 
     /**
      * 用户注销
+     *
+     * @param request 请求对象
+     * @return
      */
     @PostMapping("/logout")
     public BaseResponse<Boolean> userLogout(HttpServletRequest request) {
