@@ -1,5 +1,6 @@
 package com.sxxian.multiagentcreator.config;
 
+import com.sxxian.multiagentcreator.constant.PromptConstant;
 import jakarta.annotation.PostConstruct;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
