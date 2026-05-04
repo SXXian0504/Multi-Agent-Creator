@@ -33,5 +33,7 @@ build/
 .vscode/
 
 # Environment variables (keep .env.example)
+application-prod.yml
 application-local.yml
 !application-local.yml.example
+!application-prod.yml.example
