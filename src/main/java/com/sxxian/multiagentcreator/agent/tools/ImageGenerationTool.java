@@ -1,5 +1,9 @@
 package com.sxxian.multiagentcreator.agent.tools;
 
+import com.sxxian.multiagentcreator.model.dto.image.ImageRequest;
+import com.sxxian.multiagentcreator.model.enums.ImageMethodEnum;
+import com.sxxian.multiagentcreator.service.CosService;
+import com.sxxian.multiagentcreator.service.ImageServiceStrategy;
 import com.sxxian.multiagentcreator.utils.GsonUtils;
 import jakarta.annotation.Resource;
 import lombok.Data;

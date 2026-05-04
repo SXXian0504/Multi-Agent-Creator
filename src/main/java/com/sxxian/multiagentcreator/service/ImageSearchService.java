@@ -1,5 +1,7 @@
 package com.sxxian.multiagentcreator.service;
 
+import com.sxxian.multiagentcreator.model.dto.image.ImageData;
+import com.sxxian.multiagentcreator.model.dto.image.ImageRequest;
 import com.sxxian.multiagentcreator.model.enums.ImageMethodEnum;
 
 /**

@@ -3,8 +3,8 @@ package com.sxxian.multiagentcreator.service;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.yupi.template.config.PexelsConfig;
-import com.yupi.template.model.enums.ImageMethodEnum;
+import com.sxxian.multiagentcreator.config.PexelsConfig;
+import com.sxxian.multiagentcreator.model.enums.ImageMethodEnum;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -14,12 +14,11 @@ import org.springframework.stereotype.Service;
 import jakarta.annotation.Resource;
 import java.io.IOException;
 
-import static com.yupi.template.constant.ArticleConstant.*;
+import static com.sxxian.multiagentcreator.constant.ArticleConstant.*;
 
 /**
  * Pexels 图片检索服务
  *
- * @author <a href="https://codefather.cn">编程导航学习圈</a>
  */
 @Service
 @Slf4j
