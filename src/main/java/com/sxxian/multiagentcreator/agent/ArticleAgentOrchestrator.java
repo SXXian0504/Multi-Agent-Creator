@@ -8,6 +8,7 @@ import com.sxxian.multiagentcreator.agent.config.AgentConfig;
 import com.sxxian.multiagentcreator.agent.context.StreamHandlerContext;
 import com.sxxian.multiagentcreator.agent.parallel.ParallelImageGenerator;
 import com.sxxian.multiagentcreator.model.dto.article.ArticleState;
+import com.sxxian.multiagentcreator.model.enums.SseMessageTypeEnum;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

@@ -1,6 +1,9 @@
 package com.sxxian.multiagentcreator.controller;
 
-import cn.hutool.db.Page;
+import com.mybatisflex.core.paginate.Page;
+
+import java.util.List;
+
 import com.sxxian.multiagentcreator.common.BaseResponse;
 import com.sxxian.multiagentcreator.common.DeleteRequest;
 import com.sxxian.multiagentcreator.common.ResultUtils;
@@ -12,21 +15,20 @@ import com.sxxian.multiagentcreator.model.entity.User;
 import com.sxxian.multiagentcreator.model.enums.ArticleStyleEnum;
 import com.sxxian.multiagentcreator.model.vo.AgentExecutionStats;
 import com.sxxian.multiagentcreator.model.vo.ArticleVO;
+import com.sxxian.multiagentcreator.service.AgentLogService;
 import com.sxxian.multiagentcreator.service.ArticleAsyncService;
 import com.sxxian.multiagentcreator.service.ArticleService;
 import com.sxxian.multiagentcreator.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
-import jakarta.annotation.Resource;
-import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import java.util.List;
+import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpServletRequest;
 
 /**
  * 文章接口
- *
  */
 @RestController
 @RequestMapping("/article")
@@ -55,7 +57,7 @@ public class ArticleController {
     @Operation(summary = "创建文章任务")
     public BaseResponse<String> createArticle(@RequestBody ArticleCreateRequest request, HttpServletRequest httpServletRequest) {
         ThrowUtils.throwIf(request == null, ErrorCode.PARAMS_ERROR);
-        ThrowUtils.throwIf(request.getTopic() == null || request.getTopic().trim().isEmpty(), 
+        ThrowUtils.throwIf(request.getTopic() == null || request.getTopic().trim().isEmpty(),
                 ErrorCode.PARAMS_ERROR, "选题不能为空");
         // 校验风格参数（允许为空）
         ThrowUtils.throwIf(!ArticleStyleEnum.isValid(request.getStyle()),
@@ -65,15 +67,15 @@ public class ArticleController {
 
         // 检查并消耗配额 + 创建文章任务（在同一事务中）
         String taskId = articleService.createArticleTaskWithQuotaCheck(
-                request.getTopic(), 
-                request.getStyle(), 
+                request.getTopic(),
+                request.getStyle(),
                 request.getEnabledImageMethods(),
                 loginUser
         );
 
         // 异步执行阶段1：生成标题方案
         articleAsyncService.executePhase1(
-                taskId, 
+                taskId,
                 request.getTopic(),
                 request.getStyle()
         );
@@ -87,7 +89,7 @@ public class ArticleController {
     @GetMapping("/progress/{taskId}")
     @Operation(summary = "获取文章生成进度(SSE)")
     public SseEmitter getProgress(@PathVariable String taskId, HttpServletRequest httpServletRequest) {
-        ThrowUtils.throwIf(taskId == null || taskId.trim().isEmpty(), 
+        ThrowUtils.throwIf(taskId == null || taskId.trim().isEmpty(),
                 ErrorCode.PARAMS_ERROR, "任务ID不能为空");
 
         // 校验权限（内部会检查任务是否存在以及用户是否有权限访问）
@@ -96,7 +98,7 @@ public class ArticleController {
 
         // 创建 SSE Emitter
         SseEmitter emitter = sseEmitterManager.createEmitter(taskId);
-        
+
         log.info("SSE 连接已建立, taskId={}", taskId);
         return emitter;
     }
@@ -107,7 +109,7 @@ public class ArticleController {
     @GetMapping("/{taskId}")
     @Operation(summary = "获取文章详情")
     public BaseResponse<ArticleVO> getArticle(@PathVariable String taskId, HttpServletRequest httpServletRequest) {
-        ThrowUtils.throwIf(taskId == null || taskId.trim().isEmpty(), 
+        ThrowUtils.throwIf(taskId == null || taskId.trim().isEmpty(),
                 ErrorCode.PARAMS_ERROR, "任务ID不能为空");
 
         User loginUser = userService.getLoginUser(httpServletRequest);
@@ -125,7 +127,7 @@ public class ArticleController {
                                                      HttpServletRequest httpServletRequest) {
         User loginUser = userService.getLoginUser(httpServletRequest);
         Page<ArticleVO> articleVOPage = articleService.listArticleByPage(request, loginUser);
-        
+
         return ResultUtils.success(articleVOPage);
     }
 
@@ -135,13 +137,13 @@ public class ArticleController {
     @PostMapping("/delete")
     @Operation(summary = "删除文章")
     public BaseResponse<Boolean> deleteArticle(@RequestBody DeleteRequest deleteRequest,
-                                                 HttpServletRequest httpServletRequest) {
-        ThrowUtils.throwIf(deleteRequest == null || deleteRequest.getId() == null, 
+                                               HttpServletRequest httpServletRequest) {
+        ThrowUtils.throwIf(deleteRequest == null || deleteRequest.getId() == null,
                 ErrorCode.PARAMS_ERROR);
-        
+
         User loginUser = userService.getLoginUser(httpServletRequest);
         boolean result = articleService.deleteArticle(deleteRequest.getId(), loginUser);
-        
+
         return ResultUtils.success(result);
     }
 
@@ -151,7 +153,7 @@ public class ArticleController {
     @PostMapping("/confirm-title")
     @Operation(summary = "确认标题并输入补充描述")
     public BaseResponse<Void> confirmTitle(@RequestBody ArticleConfirmTitleRequest request,
-                                            HttpServletRequest httpServletRequest) {
+                                           HttpServletRequest httpServletRequest) {
         ThrowUtils.throwIf(request == null, ErrorCode.PARAMS_ERROR);
         ThrowUtils.throwIf(request.getTaskId() == null || request.getTaskId().trim().isEmpty(),
                 ErrorCode.PARAMS_ERROR, "任务ID不能为空");
@@ -183,7 +185,7 @@ public class ArticleController {
     @PostMapping("/confirm-outline")
     @Operation(summary = "确认大纲")
     public BaseResponse<Void> confirmOutline(@RequestBody ArticleConfirmOutlineRequest request,
-                                              HttpServletRequest httpServletRequest) {
+                                             HttpServletRequest httpServletRequest) {
         ThrowUtils.throwIf(request == null, ErrorCode.PARAMS_ERROR);
         ThrowUtils.throwIf(request.getTaskId() == null || request.getTaskId().trim().isEmpty(),
                 ErrorCode.PARAMS_ERROR, "任务ID不能为空");
@@ -237,9 +239,9 @@ public class ArticleController {
     @GetMapping("/execution-logs/{taskId}")
     @Operation(summary = "获取任务执行日志")
     public BaseResponse<AgentExecutionStats> getExecutionLogs(@PathVariable String taskId) {
-        ThrowUtils.throwIf(taskId == null || taskId.trim().isEmpty(), 
+        ThrowUtils.throwIf(taskId == null || taskId.trim().isEmpty(),
                 ErrorCode.PARAMS_ERROR, "任务ID不能为空");
-        
+
         AgentExecutionStats stats = agentLogService.getExecutionStats(taskId);
         return ResultUtils.success(stats);
     }

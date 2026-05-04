@@ -1,8 +1,7 @@
 package com.sxxian.multiagentcreator.service.impl;
 
 import cn.hutool.core.util.IdUtil;
-import cn.hutool.db.Page;
-import com.google.gson.reflect.TypeToken;
+import com.mybatisflex.core.paginate.Page;
 import com.mybatisflex.core.query.QueryWrapper;
 import com.mybatisflex.spring.service.impl.ServiceImpl;
 import com.sxxian.multiagentcreator.exception.BusinessException;
@@ -15,10 +14,12 @@ import com.sxxian.multiagentcreator.model.entity.Article;
 import com.sxxian.multiagentcreator.model.entity.User;
 import com.sxxian.multiagentcreator.model.enums.ArticlePhaseEnum;
 import com.sxxian.multiagentcreator.model.enums.ArticleStatusEnum;
-import com.sxxian.multiagentcreator.model.enums.ImageMethodEnum;
 import com.sxxian.multiagentcreator.model.vo.ArticleVO;
 import com.sxxian.multiagentcreator.service.ArticleAgentService;
+import com.sxxian.multiagentcreator.service.ArticleService;
+import com.sxxian.multiagentcreator.service.QuotaService;
 import com.sxxian.multiagentcreator.utils.GsonUtils;
+import com.google.gson.reflect.TypeToken;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -28,19 +29,22 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import com.sxxian.multiagentcreator.model.enums.ImageMethodEnum;
+
 import static com.sxxian.multiagentcreator.constant.UserConstant.ADMIN_ROLE;
 import static com.sxxian.multiagentcreator.constant.UserConstant.VIP_ROLE;
 
 /**
  * 文章服务实现类
  *
+ * @author <a href="https://codefather.cn">编程导航学习圈</a>
  */
 @Service
 @Slf4j
 public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> implements ArticleService {
 
-//    @Resource
-//    private QuotaService quotaService;
+    @Resource
+    private QuotaService quotaService;
 
     @Resource
     private ArticleAgentService articleAgentService;
@@ -74,14 +78,14 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
         return taskId;
     }
 
-//    @Override
-//    @Transactional(rollbackFor = Exception.class)
-//    public String createArticleTaskWithQuotaCheck(String topic, String style, List<String> enabledImageMethods, User loginUser) {
-//        // 在同一事务中：先扣配额，再创建任务
-//        // 如果任务创建失败，配额会自动回滚
-//        quotaService.checkAndConsumeQuota(loginUser);
-//        return createArticleTask(topic, style, enabledImageMethods, loginUser);
-//    }
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public String createArticleTaskWithQuotaCheck(String topic, String style, List<String> enabledImageMethods, User loginUser) {
+        // 在同一事务中：先扣配额，再创建任务
+        // 如果任务创建失败，配额会自动回滚
+        quotaService.checkAndConsumeQuota(loginUser);
+        return createArticleTask(topic, style, enabledImageMethods, loginUser);
+    }
 
     @Override
     public Article getByTaskId(String taskId) {
@@ -102,7 +106,7 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
     }
 
     @Override
-    public com.mybatisflex.core.paginate.Page<ArticleVO> listArticleByPage(ArticleQueryRequest request, User loginUser) {
+    public Page<ArticleVO> listArticleByPage(ArticleQueryRequest request, User loginUser) {
         long current = request.getPageNum();
         long size = request.getPageSize();
 
@@ -124,7 +128,7 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
         }
 
         // 分页查询
-        com.mybatisflex.core.paginate.Page<Article> articlePage = this.page(new com.mybatisflex.core.paginate.Page<>(current, size), queryWrapper);
+        Page<Article> articlePage = this.page(new Page<>(current, size), queryWrapper);
 
         // 转换为 VO
         return convertToVOPage(articlePage);
@@ -209,8 +213,8 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
      * @param articlePage 文章分页
      * @return VO 分页
      */
-    private com.mybatisflex.core.paginate.Page<ArticleVO> convertToVOPage(com.mybatisflex.core.paginate.Page<Article> articlePage) {
-        com.mybatisflex.core.paginate.Page<ArticleVO> articleVOPage = new Page<>();
+    private Page<ArticleVO> convertToVOPage(Page<Article> articlePage) {
+        Page<ArticleVO> articleVOPage = new Page<>();
         articleVOPage.setPageNumber(articlePage.getPageNumber());
         articleVOPage.setPageSize(articlePage.getPageSize());
         articleVOPage.setTotalRow(articlePage.getTotalRow());
@@ -313,7 +317,8 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
         // 获取当前大纲
         List<ArticleState.OutlineSection> currentOutline = GsonUtils.fromJson(
                 article.getOutline(),
-                new TypeToken<List<ArticleState.OutlineSection>>(){}
+                new TypeToken<>() {
+                }
         );
 
         // 调用 AI 修改大纲

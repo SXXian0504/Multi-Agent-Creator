@@ -6,6 +6,7 @@ import com.google.gson.reflect.TypeToken;
 import com.sxxian.multiagentcreator.annotation.AgentExecution;
 import com.sxxian.multiagentcreator.constant.PromptConstant;
 import com.sxxian.multiagentcreator.model.dto.article.ArticleState;
+import com.sxxian.multiagentcreator.model.dto.image.ImageRequest;
 import com.sxxian.multiagentcreator.model.enums.ArticleStyleEnum;
 import com.sxxian.multiagentcreator.model.enums.ImageMethodEnum;
 import com.sxxian.multiagentcreator.model.enums.SseMessageTypeEnum;
