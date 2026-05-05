@@ -8,7 +8,7 @@
           <div class="brand-logo">
             <img src="@/assets/logo.png" alt="Logo" class="logo-img" />
           </div>
-          <h1 class="brand-title">Multi-Agent-Creator图文创作平台</h1>
+          <h1 class="brand-title">Multi-Agent-Creator<br>图文创作平台</h1>
           <p class="brand-subtitle">标题、大纲、正文及配图的多模态协同生成</p>
           <div class="brand-features">
             <div class="feature-item">
@@ -156,7 +156,7 @@ const handleSubmit = async (values: any) => {
   left: 0;
   right: 0;
   bottom: 0;
-  background: linear-gradient(135deg, #22C55E 0%, #16A34A 50%, #15803D 100%);
+  background: linear-gradient(135deg, #467599 0%, #2c5282 50%, #1a365d 100%);
 }
 
 .brand-bg::before {
@@ -279,7 +279,7 @@ const handleSubmit = async (values: any) => {
 .form-input:focus,
 .form-input:focus-within {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.1);
+  box-shadow: 0 0 0 3px #FFF8E7;
 }
 
 .form-input :deep(.ant-input) {

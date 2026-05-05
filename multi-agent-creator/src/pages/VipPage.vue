@@ -265,8 +265,8 @@ const handlePurchase = async () => {
   align-items: center;
   gap: 6px;
   padding: 8px 16px;
-  background: rgba(34, 197, 94, 0.1);
-  border: 1px solid rgba(34, 197, 94, 0.2);
+  background: #FFF8E7;
+  border: 1px solid #FFF8E7;
   border-radius: var(--radius-full);
   font-size: 13px;
   font-weight: 600;
@@ -339,7 +339,7 @@ const handlePurchase = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(34, 197, 94, 0.1);
+  background: #FFF8E7;
   border-radius: var(--radius-lg);
 
   .anticon {
@@ -500,7 +500,7 @@ const handlePurchase = async () => {
   transition: all var(--transition-normal);
 
   &:hover {
-    background: rgba(34, 197, 94, 0.06);
+    background: #FFF8E7;
   }
 }
 
@@ -511,7 +511,7 @@ const handlePurchase = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(34, 197, 94, 0.1);
+  background: #FFF8E7;
   border-radius: var(--radius-md);
 }
 

@@ -169,7 +169,7 @@ const handleConfirm = () => {
 
   &:hover {
     border-color: var(--color-primary);
-    background: rgba(34, 197, 94, 0.04);
+    background: #FFF8E7;
   }
 
   :deep(.ant-radio-wrapper) {
@@ -252,12 +252,12 @@ const handleConfirm = () => {
   background: var(--gradient-primary) !important;
   border: none !important;
   color: white !important;
-  box-shadow: 0 4px 14px rgba(34, 197, 94, 0.3) !important;
+  box-shadow: 0 4px 14px #FFF8E7 !important;
 
   &:hover:not(:disabled) {
     opacity: 0.92;
     transform: translateY(-1px);
-    box-shadow: 0 6px 20px rgba(34, 197, 94, 0.4) !important;
+    box-shadow: 0 6px 20px #FFF8E7 !important;
   }
 
   &:disabled {

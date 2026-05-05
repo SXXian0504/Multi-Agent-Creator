@@ -32,9 +32,9 @@ create table if not exists user
 -- 初始化数据
 -- 密码是 12345678（MD5 加密 + 盐值 sxxian）
 INSERT INTO user (id, userAccount, userPassword, userName, userAvatar, userProfile, userRole) VALUES
-(1, 'admin', '10670d38ec32fa8102be6a37f8cb52bf', '管理员', 'https://www.codefather.cn/logo.png', '系统管理员', 'admin'),
-(2, 'user', '10670d38ec32fa8102be6a37f8cb52bf', '普通用户', 'https://www.codefather.cn/logo.png', '我是一个普通用户', 'user'),
-(3, 'test', '10670d38ec32fa8102be6a37f8cb52bf', '测试账号', 'https://www.codefather.cn/logo.png', '这是一个测试账号', 'user');
+(1, 'admin', '4f0dab9f6c86d36f3107e3ab48bc2793', '管理员', '(NULL)', '系统管理员', 'admin'),
+(2, 'user', '4f0dab9f6c86d36f3107e3ab48bc2793', '普通用户', '(NULL)', '我是一个普通用户', 'user'),
+(3, 'test', '4f0dab9f6c86d36f3107e3ab48bc2793', '测试账号', '(NULL)', '这是一个测试账号', 'user');
 
 -- 文章表（基础字段，style/phase/titleOptions/userDescription/enabledImageMethods 由增量脚本添加）
 create table if not exists article

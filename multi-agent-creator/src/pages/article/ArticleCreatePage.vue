@@ -1084,7 +1084,7 @@ onBeforeUnmount(() => {
   }
 
   .active & {
-    background: rgba(34, 197, 94, 0.1);
+    background: #FFF8E7;
     color: var(--color-primary);
     border: 2px solid var(--color-primary);
   }
@@ -1200,7 +1200,7 @@ onBeforeUnmount(() => {
 
   &:focus {
     border-color: var(--color-primary);
-    box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.1);
+    box-shadow: 0 0 0 3px #FFF8E7;
   }
 }
 
@@ -1212,7 +1212,7 @@ onBeforeUnmount(() => {
   background: var(--gradient-primary) !important;
   border: none !important;
   color: white !important;
-  box-shadow: 0 4px 14px rgba(34, 197, 94, 0.3) !important;
+  box-shadow: 0 4px 14px #FFF8E7 !important;
 
   &:hover,
   &:focus,
@@ -1220,7 +1220,7 @@ onBeforeUnmount(() => {
     background: var(--gradient-primary) !important;
     color: white !important;
     border: none !important;
-    box-shadow: 0 4px 14px rgba(34, 197, 94, 0.3) !important;
+    box-shadow: 0 4px 14px #FFF8E7 !important;
     opacity: 0.92;
   }
 
@@ -1272,12 +1272,12 @@ onBeforeUnmount(() => {
 
 .style-group :deep(.ant-radio-wrapper:hover) {
   border-color: var(--color-primary);
-  background: rgba(34, 197, 94, 0.04);
+  background: #FFF8E7;
 }
 
 .style-group :deep(.ant-radio-wrapper-checked) {
   border-color: var(--color-primary);
-  background: rgba(34, 197, 94, 0.08);
+  background: #FFF8E7;
 }
 
 /* 配图方式选择 */
@@ -1323,12 +1323,12 @@ onBeforeUnmount(() => {
 
 .methods-group :deep(.ant-checkbox-wrapper:hover) {
   border-color: var(--color-primary);
-  background: rgba(34, 197, 94, 0.04);
+  background: #FFF8E7;
 }
 
 .methods-group :deep(.ant-checkbox-wrapper-checked) {
   border-color: var(--color-primary);
-  background: rgba(34, 197, 94, 0.08);
+  background: #FFF8E7;
 }
 
 .methods-group :deep(.ant-checkbox-wrapper-disabled) {
@@ -1348,11 +1348,11 @@ onBeforeUnmount(() => {
   gap: 6px;
   margin-top: 12px;
   padding: 10px 14px;
-  background: rgba(34, 197, 94, 0.08);
+  background: #FFF8E7;
   border-radius: var(--radius-md);
   font-size: 12px;
   color: var(--color-primary-dark);
-  border: 1px solid rgba(34, 197, 94, 0.2);
+  border: 1px solid #FFF8E7;
 
   .anticon {
     color: var(--color-primary);
@@ -1589,7 +1589,7 @@ onBeforeUnmount(() => {
 
 /* 配额信息样式 */
 .quota-section {
-  background: linear-gradient(135deg, rgba(34, 197, 94, 0.05) 0%, rgba(34, 197, 94, 0.02) 100%);
+  background: linear-gradient(135deg, #FFF8E7 0%, #FFF8E7 100%);
   border-radius: var(--radius-lg);
   padding: 16px !important;
   margin: -8px -8px 12px -8px;
@@ -1686,7 +1686,7 @@ onBeforeUnmount(() => {
   &:hover {
     border-color: var(--color-primary);
     color: var(--color-primary);
-    background: rgba(34, 197, 94, 0.05);
+    background: #FFF8E7;
     transform: translateY(-1px);
   }
 }
@@ -1708,7 +1708,7 @@ onBeforeUnmount(() => {
   transition: all var(--transition-fast);
 
   &:hover {
-    background: rgba(34, 197, 94, 0.05);
+    background: #FFF8E7;
   }
 }
 
@@ -1777,7 +1777,7 @@ onBeforeUnmount(() => {
   align-items: flex-start;
   gap: 8px;
   padding: 12px;
-  background: rgba(34, 197, 94, 0.08);
+  background: #FFF8E7;
   border-radius: var(--radius-md);
   font-size: 12px;
   color: var(--color-primary-dark);

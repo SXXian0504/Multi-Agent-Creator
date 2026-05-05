@@ -537,7 +537,7 @@ onMounted(() => {
     }
 
     :deep(.ant-table-tbody > tr:hover > td) {
-      background: rgba(34, 197, 94, 0.02);
+      background: #FFF8E7;
     }
 
     :deep(.ant-table-pagination) {

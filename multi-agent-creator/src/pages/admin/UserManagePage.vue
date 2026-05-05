@@ -267,7 +267,7 @@ onMounted(() => {
 
     &:focus {
       border-color: var(--color-primary);
-      box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.1);
+      box-shadow: 0 0 0 2px #FFF8E7;
     }
   }
 
@@ -311,7 +311,7 @@ onMounted(() => {
     }
 
     :deep(.ant-table-tbody > tr:hover > td) {
-      background: rgba(34, 197, 94, 0.02);
+      background: #FFF8E7;
     }
 
     :deep(.ant-table-pagination) {

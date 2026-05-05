@@ -115,10 +115,10 @@ onMounted(() => {
       <div class="container">
         <div class="hero-badge">
           <ThunderboltOutlined />
-          <span>AI 驱动的内容创作平台</span>
+          <span>Multi-Agent-Creator</span>
         </div>
-        <h1 class="hero-title">AI 爆款文章创作器</h1>
-        <p class="hero-subtitle">让每个人都能写出 10万+ 文章</p>
+        <h1 class="hero-title">图文创作平台</h1>
+        <p class="hero-subtitle">从选题到成稿，一次生成高质量内容</p>
 
         <!-- 核心输入框 -->
         <div class="input-wrapper">
@@ -260,8 +260,8 @@ onMounted(() => {
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  background: rgba(34, 197, 94, 0.1);
-  border: 1px solid rgba(34, 197, 94, 0.2);
+  background: #FFF8E7;
+  border: 1px solid #FFF8E7;
   border-radius: var(--radius-full);
   font-size: 14px;
   font-weight: 500;
@@ -375,7 +375,7 @@ onMounted(() => {
 .section-badge {
   display: inline-block;
   padding: 6px 14px;
-  background: rgba(34, 197, 94, 0.1);
+  background: #FFF8E7;
   border-radius: var(--radius-full);
   font-size: 13px;
   font-weight: 600;

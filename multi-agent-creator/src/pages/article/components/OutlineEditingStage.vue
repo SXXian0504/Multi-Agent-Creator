@@ -409,14 +409,14 @@ const handleAiModify = async () => {
 }
 
 .ai-chat-section {
-  background: linear-gradient(135deg, rgba(34, 197, 94, 0.05) 0%, rgba(34, 197, 94, 0.02) 100%);
+  background: linear-gradient(135deg, #FFF8E7 0%, #FFF8E7 100%);
   border: 2px dashed var(--color-primary);
   border-radius: var(--radius-lg);
   padding: 24px;
   margin-bottom: 32px;
 
   &.vip-only {
-    background: linear-gradient(135deg, rgba(34, 197, 94, 0.05) 0%, rgba(22, 163, 74, 0.02) 100%);
+    background: linear-gradient(135deg, #FFF8E7 0%, rgba(22, 163, 74, 0.02) 100%);
     border-color: var(--color-primary);
   }
 }
@@ -480,7 +480,7 @@ const handleAiModify = async () => {
 
     &:hover {
       transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(34, 197, 94, 0.35);
+      box-shadow: 0 6px 20px #FFF8E7;
       color: white;
     }
   }
@@ -525,12 +525,12 @@ const handleAiModify = async () => {
   background: var(--gradient-primary) !important;
   border: none !important;
   color: white !important;
-  box-shadow: 0 4px 14px rgba(34, 197, 94, 0.3) !important;
+  box-shadow: 0 4px 14px #FFF8E7 !important;
 
   &:hover:not(:disabled) {
     opacity: 0.92;
     transform: translateY(-1px);
-    box-shadow: 0 6px 20px rgba(34, 197, 94, 0.4) !important;
+    box-shadow: 0 6px 20px #FFF8E7 !important;
   }
 
   &:disabled {

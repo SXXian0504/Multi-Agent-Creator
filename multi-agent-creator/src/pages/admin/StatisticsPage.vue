@@ -21,7 +21,7 @@
         <!-- 核心指标卡片 -->
         <div class="stats-grid">
           <div class="stat-card">
-            <div class="stat-icon" style="background: rgba(34, 197, 94, 0.1)">
+            <div class="stat-icon" style="background: #FFF8E7">
               <FileTextOutlined style="color: var(--color-primary)" />
             </div>
             <div class="stat-content">

@@ -34,7 +34,11 @@ const statusText = computed(() => getStatusText(props.status))
 }
 
 .status-badge.status-completed {
-  background: rgba(34, 197, 94, 0.1);
+  background: #FFF8E7;
+  color: var(--color-primary-dark);
+}
+.status-badge.status-completed.new {
+  background: #FFF8E7;
   color: var(--color-primary-dark);
 }
 
