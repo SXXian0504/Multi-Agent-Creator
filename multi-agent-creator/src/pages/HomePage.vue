@@ -124,7 +124,7 @@ onMounted(() => {
         <div class="input-wrapper">
           <a-input
             v-model:value="topic"
-            placeholder="输入您想创作的文章选题，例如：2026年AI如何改变职场"
+            placeholder="输入您想创作的文章选题，例如：AI Agent技术发展趋势"
             size="large"
             class="topic-input"
             @pressEnter="goToCreate"
@@ -139,7 +139,7 @@ onMounted(() => {
           </a-button>
         </div>
 
-        <p class="hero-tips">工作总结、心得体会、演讲稿、分析报告... 一键生成</p>
+        <p class="hero-tips">  从种草风到干货文，多种风格内容一键切换 </p>
       </div>
     </div>
 
@@ -148,8 +148,8 @@ onMounted(() => {
       <div class="container">
         <div class="section-header">
           <div class="section-badge">核心能力</div>
-          <h2 class="section-title">专业人士的一站式AI写作工具</h2>
-          <p class="section-subtitle">强大的 AI 能力，让创作变得简单高效</p>
+          <h2 class="section-title">不只是写作，而是完整创作流程</h2>
+          <p class="section-subtitle">多个AI智能体协作，从灵感到成稿全自动完成</p>
         </div>
         <div class="features-grid">
           <div
