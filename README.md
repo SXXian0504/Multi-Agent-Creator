@@ -11,7 +11,7 @@ Multi-Agent-Creator 是针对自媒体内容创作中选题难、写作慢、配
 ```
 智能体1: 选题分析 → 生成候选标题 → 用户决策
 智能体2: 标题解析 → 构建内容大纲 → 用户编辑 / AI优化
-智能体3: 大纲展开 → 生成Markdown正文 → RAG增强
+智能体3: 大纲展开 → 生成Markdown正文
 智能体4: 内容分析 → 生成配图需求 → 多模态匹配
 智能体5: 配图执行 → 图文智能合成 → 成品输出
 ```
@@ -191,7 +191,7 @@ API文档地址：http://localhost:8567/api/doc.html
 ### 4. 启动前端服务
 
 ```bash
-cd frontend
+cd ./multi-agent-creator/
 
 # 安装依赖
 npm install
@@ -387,7 +387,7 @@ docker compose up -d --build
 | 表名 | 功能描述 | 关键特性 |
 |------|----------|----------|
 | user | 用户账户管理 | VIP状态、创作配额、权限控制 |
-| article | 文章生命周期管理 | 多阶段状态、配图策略、RAG增强 |
+| article | 文章生命周期管理 | 多阶段状态、配图策略 |
 | agent_log | 智能体执行追踪 | 性能监控、错误诊断、优化分析 |
 | payment_record | 支付交易记录 | Stripe集成、会员管理、配额分配 |
 
