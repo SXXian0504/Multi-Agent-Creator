@@ -7,11 +7,14 @@ import com.sxxian.multiagentcreator.annotation.AgentExecution;
 import com.sxxian.multiagentcreator.constant.PromptConstant;
 import com.sxxian.multiagentcreator.model.dto.article.ArticleContext;
 import com.sxxian.multiagentcreator.model.dto.article.ArticleState;
+import com.sxxian.multiagentcreator.model.dto.review.ReviewResult;
 import com.sxxian.multiagentcreator.model.enums.ArticlePhaseEnum;
 import com.sxxian.multiagentcreator.model.enums.ArticleStyleEnum;
 import com.sxxian.multiagentcreator.model.enums.SseMessageTypeEnum;
+import com.sxxian.multiagentcreator.model.enums.StructuredOutputTypeEnum;
+import com.sxxian.multiagentcreator.service.JsonStructuredOutputService;
+import com.sxxian.multiagentcreator.utils.ArticlePromptUtils;
 import com.sxxian.multiagentcreator.utils.GsonUtils;
-import com.google.gson.JsonSyntaxException;
 import com.google.gson.reflect.TypeToken;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,22 +39,30 @@ import java.util.function.Consumer;
 public class ArticleAgent {
 
     private final DashScopeChatModel chatModel;
+    private final JsonStructuredOutputService jsonStructuredOutputService;
+    private final ReviewAgent reviewAgent;
 
     @AgentExecution(value = "article_agent_generate_titles", description = "ArticleAgent生成标题", phase = "TITLE_GENERATING")
     public ArticleContext generateTitles(ArticleContext context) {
         String prompt = PromptConstant.AGENT1_TITLE_PROMPT
                 .replace("{topic}", context.getTopic())
                 + buildFeedbackPrompt(context, ArticlePhaseEnum.TITLE_GENERATING)
+                + getWordRangePrompt(context.getWordRange())
                 + getStylePrompt(context.getStyle());
 
-        String content = callLlm(prompt);
-        List<ArticleState.TitleOption> titleOptions = parseJsonListResponse(
-                content,
-                new TypeToken<List<ArticleState.TitleOption>>() {},
-                "标题方案"
-        );
+        List<ArticleState.TitleOption> titleOptions = generateTitleOptions(prompt);
 
         context.setTitleOptions(titleOptions);
+        ReviewResult reviewResult = reviewAgent.reviewTitles(contextToState(context));
+        context.setTitleReviewResult(reviewResult);
+        if (!reviewResult.isApprovedByThreshold()) {
+            String revisionAdvice = reviewAgent.buildRevisionAdvice(reviewResult);
+            context.setReviewAdvice(revisionAdvice);
+            String revisedPrompt = prompt + revisionAdvice;
+            context.setTitleOptions(generateTitleOptions(revisedPrompt));
+            reviewResult = reviewAgent.reviewTitles(contextToState(context));
+            context.setTitleReviewResult(reviewResult);
+        }
         context.setPhase(ArticlePhaseEnum.TITLE_WAITING_USER_CONFIRM.getValue());
         log.info("ArticleAgent 标题生成完成, taskId={}, optionsCount={}", context.getTaskId(), titleOptions.size());
         return context;
@@ -70,12 +81,22 @@ public class ArticleAgent {
                 .replace("{subTitle}", context.getTitle().getSubTitle())
                 .replace("{descriptionSection}", descriptionSection)
                 + buildFeedbackPrompt(context, ArticlePhaseEnum.OUTLINE_GENERATING)
+                + ArticlePromptUtils.getOutlineWordRangePrompt(context.getWordRange(), context.getStyle())
                 + getStylePrompt(context.getStyle());
 
-        String content = callLlmWithStreaming(prompt, streamHandler, SseMessageTypeEnum.AGENT2_STREAMING);
-        ArticleState.OutlineResult outlineResult = parseJsonResponse(content, ArticleState.OutlineResult.class, "大纲");
+        ArticleState.OutlineResult outlineResult = generateOutlineResult(prompt, streamHandler);
 
         context.setOutline(outlineResult);
+        ReviewResult reviewResult = reviewAgent.reviewOutline(contextToState(context));
+        context.setOutlineReviewResult(reviewResult);
+        if (!reviewResult.isApprovedByThreshold()) {
+            String revisionAdvice = reviewAgent.buildRevisionAdvice(reviewResult);
+            context.setReviewAdvice(revisionAdvice);
+            String revisedPrompt = prompt + revisionAdvice;
+            context.setOutline(generateOutlineResult(revisedPrompt, streamHandler));
+            reviewResult = reviewAgent.reviewOutline(contextToState(context));
+            context.setOutlineReviewResult(reviewResult);
+        }
         context.setPhase(ArticlePhaseEnum.OUTLINE_WAITING_USER_CONFIRM.getValue());
         log.info("ArticleAgent 大纲生成完成, taskId={}, sections={}",
                 context.getTaskId(), outlineResult.getSections().size());
@@ -90,10 +111,26 @@ public class ArticleAgent {
                 .replace("{subTitle}", context.getTitle().getSubTitle())
                 .replace("{outline}", outlineText)
                 + buildFeedbackPrompt(context, ArticlePhaseEnum.CONTENT_GENERATING)
+                + getWordRangePrompt(context.getWordRange())
                 + getStylePrompt(context.getStyle());
 
         String content = callLlmWithStreaming(prompt, streamHandler, SseMessageTypeEnum.AGENT3_STREAMING);
         context.setContent(content);
+        ReviewResult reviewResult = reviewAgent.reviewContent(contextToState(context));
+        context.setContentReviewResult(reviewResult);
+        if (!reviewResult.isApprovedByThreshold()) {
+            String revisionAdvice = reviewAgent.buildRevisionAdvice(reviewResult);
+            context.setReviewAdvice(revisionAdvice);
+            String revisedPrompt = prompt + revisionAdvice;
+            context.setContent(callLlmWithStreaming(revisedPrompt, streamHandler, SseMessageTypeEnum.AGENT3_STREAMING));
+            reviewResult = reviewAgent.reviewContent(contextToState(context));
+            context.setContentReviewResult(reviewResult);
+            if (!reviewResult.isApprovedByThreshold()) {
+                context.setReviewAdvice(reviewAgent.buildRevisionAdvice(reviewResult));
+                log.warn("ArticleAgent 正文二次评审仍未通过, taskId={}, score={}, 保留重写结果并继续后续流程",
+                        context.getTaskId(), reviewResult.getScore());
+            }
+        }
         context.setPhase(ArticlePhaseEnum.CONTENT_WAITING_USER_CONFIRM.getValue());
         log.info("ArticleAgent 正文生成完成, taskId={}, length={}", context.getTaskId(), content.length());
         return context;
@@ -121,16 +158,22 @@ public class ArticleAgent {
         context.setTaskId(readString(state, "taskId", null));
         context.setTopic(readString(state, "topic", true));
         context.setStyle(readString(state, "style", null));
+        context.setWordRange(readString(state, "wordRange", null));
 
         generateTitles(context);
-        return Map.of("titleOptions", context.getTitleOptions());
+        return Map.of(
+                "titleOptions", context.getTitleOptions(),
+                "titleReviewResult", context.getTitleReviewResult()
+        );
     }
 
     @AgentExecution(value = "article_agent_node_generate_outline", description = "ArticleAgent编排节点生成大纲", phase = "OUTLINE_GENERATING")
     public Map<String, Object> generateOutlineNode(OverAllState state) {
         ArticleContext context = new ArticleContext();
         context.setTaskId(readString(state, "taskId", null));
+        context.setTopic(readString(state, "topic", null));
         context.setStyle(readString(state, "style", null));
+        context.setWordRange(readString(state, "wordRange", null));
         context.setUserDescription(readString(state, "userDescription", null));
 
         ArticleState.TitleResult title = new ArticleState.TitleResult();
@@ -139,14 +182,20 @@ public class ArticleAgent {
         context.setTitle(title);
 
         generateOutline(context, StreamHandlerContext.get());
-        return Map.of("outline", context.getOutline());
+        return Map.of(
+                "outline", context.getOutline(),
+                "outlineReviewResult", context.getOutlineReviewResult()
+        );
     }
 
     @AgentExecution(value = "article_agent_node_generate_content", description = "ArticleAgent编排节点生成正文", phase = "CONTENT_GENERATING")
     public Map<String, Object> generateContentNode(OverAllState state) {
         ArticleContext context = new ArticleContext();
         context.setTaskId(readString(state, "taskId", null));
+        context.setTopic(readString(state, "topic", null));
         context.setStyle(readString(state, "style", null));
+        context.setWordRange(readString(state, "wordRange", null));
+        context.setUserDescription(readString(state, "userDescription", null));
 
         ArticleState.TitleResult title = new ArticleState.TitleResult();
         title.setMainTitle(readString(state, "mainTitle", true));
@@ -164,7 +213,38 @@ public class ArticleAgent {
         context.setOutline(outline);
 
         generateContent(context, StreamHandlerContext.get());
-        return Map.of("content", context.getContent());
+        return Map.of(
+                "content", context.getContent(),
+                "contentReviewResult", context.getContentReviewResult()
+        );
+    }
+
+    private List<ArticleState.TitleOption> generateTitleOptions(String prompt) {
+        String content = callLlm(prompt);
+        return jsonStructuredOutputService.parse(
+                content,
+                new TypeToken<List<ArticleState.TitleOption>>() {},
+                StructuredOutputTypeEnum.TITLE_OPTIONS,
+                () -> callLlm(prompt),
+                1
+        );
+    }
+
+    private ArticleState.OutlineResult generateOutlineResult(String prompt, Consumer<String> streamHandler) {
+        String content = callLlmWithStreaming(prompt, streamHandler, SseMessageTypeEnum.AGENT2_STREAMING);
+        return jsonStructuredOutputService.parse(
+                content,
+                ArticleState.OutlineResult.class,
+                StructuredOutputTypeEnum.OUTLINE_RESULT,
+                () -> callLlmWithStreaming(prompt, streamHandler, SseMessageTypeEnum.AGENT2_STREAMING),
+                1
+        );
+    }
+
+    private ArticleState contextToState(ArticleContext context) {
+        ArticleState state = new ArticleState();
+        context.applyToState(state);
+        return state;
     }
 
     private String callLlm(String prompt) {
@@ -190,24 +270,6 @@ public class ArticleAgent {
                 .blockLast();
 
         return contentBuilder.toString();
-    }
-
-    private <T> T parseJsonResponse(String content, Class<T> clazz, String name) {
-        try {
-            return GsonUtils.fromJson(content, clazz);
-        } catch (JsonSyntaxException e) {
-            log.error("{}解析失败, content={}", name, content, e);
-            throw new RuntimeException(name + "解析失败");
-        }
-    }
-
-    private <T> T parseJsonListResponse(String content, TypeToken<T> typeToken, String name) {
-        try {
-            return GsonUtils.fromJson(content, typeToken);
-        } catch (JsonSyntaxException e) {
-            log.error("{}解析失败, content={}", name, content, e);
-            throw new RuntimeException(name + "解析失败");
-        }
     }
 
     private String buildFeedbackPrompt(ArticleContext context, ArticlePhaseEnum phase) {
@@ -244,6 +306,18 @@ public class ArticleAgent {
             case EMOTIONAL -> PromptConstant.STYLE_EMOTIONAL_PROMPT;
             case EDUCATIONAL -> PromptConstant.STYLE_EDUCATIONAL_PROMPT;
             case HUMOROUS -> PromptConstant.STYLE_HUMOROUS_PROMPT;
+            case MARKETING -> PromptConstant.STYLE_MARKETING_PROMPT;
         };
     }
+
+    private String getWordRangePrompt(String wordRange) {
+        String instruction = switch (wordRange == null ? "" : wordRange) {
+            case "short" -> "用户选择短文，正文建议约 200-500 字；营销图文可更短，但必须完整覆盖卖点、信任支撑和行动引导。";
+            case "medium" -> "用户选择中等篇幅，正文建议约 800-1500 字；请在信息完整和阅读效率之间平衡。";
+            case "long" -> "用户选择长文，正文建议约 2000-3500 字；需要更充分的解释、案例、论证和小结。";
+            default -> "用户未指定字数范围，请由 ArticleAgent 根据选题、文章风格和大纲自行评估篇幅；营销类通常更短，科普/技术类可适当更长。";
+        };
+        return PromptConstant.WORD_RANGE_PROMPT.replace("{wordRangeInstruction}", instruction);
+    }
+
 }

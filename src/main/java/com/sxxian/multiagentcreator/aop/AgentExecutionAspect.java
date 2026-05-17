@@ -1,10 +1,12 @@
 package com.sxxian.multiagentcreator.aop;
 
 import com.alibaba.cloud.ai.graph.OverAllState;
+import com.sxxian.multiagentcreator.context.StructuredOutputTraceContext;
 import com.sxxian.multiagentcreator.model.dto.article.ArticleContext;
 import com.sxxian.multiagentcreator.annotation.AgentExecution;
 import com.sxxian.multiagentcreator.model.dto.article.ArticleState;
 import com.sxxian.multiagentcreator.model.entity.AgentLog;
+import com.sxxian.multiagentcreator.model.dto.review.ReviewResult;
 import com.sxxian.multiagentcreator.service.AgentLogService;
 import com.sxxian.multiagentcreator.utils.GsonUtils;
 import jakarta.annotation.Resource;
@@ -44,7 +46,7 @@ public class AgentExecutionAspect {
         String prompt = extractPrompt(pjp);
         String phase = extractPhase(pjp, agentExecution);
         String traceId = "unknown".equals(taskId) ? null : taskId;
-        String metadata = buildMetadata(agentExecution, pjp);
+        StructuredOutputTraceContext.clear();
 
         // 创建日志对象
         AgentLog agentLog = AgentLog.builder()
@@ -57,7 +59,6 @@ public class AgentExecutionAspect {
                 .retryCount(agentExecution.retryCount())
                 .prompt(prompt)
                 .inputData(inputData)
-                .metadata(metadata)
                 .build();
 
         Object result = null;
@@ -86,6 +87,8 @@ public class AgentExecutionAspect {
 
             throw e;
         } finally {
+            agentLog.setMetadata(buildMetadata(agentExecution, pjp));
+            StructuredOutputTraceContext.clear();
             // 异步保存日志
             agentLogService.saveLogAsync(agentLog);
         }
@@ -208,6 +211,10 @@ public class AgentExecutionAspect {
                 return String.valueOf(result);
             }
 
+            if (result instanceof ReviewResult) {
+                return GsonUtils.toJson(result);
+            }
+
             // 对于集合类型，只记录数量
             if (result instanceof java.util.List) {
                 return "{\"listSize\": " + ((java.util.List<?>) result).size() + "}";
@@ -248,7 +255,8 @@ public class AgentExecutionAspect {
             metadata.put("className", method.getDeclaringClass().getSimpleName());
             metadata.put("methodName", method.getName());
             metadata.put("retryCount", agentExecution.retryCount());
-            metadata.put("logVersion", "stage1");
+            metadata.put("structuredOutputMetrics", StructuredOutputTraceContext.snapshot());
+            metadata.put("logVersion", "stage3");
             return GsonUtils.toJson(metadata);
         } catch (Exception e) {
             log.warn("构建日志 metadata 失败", e);

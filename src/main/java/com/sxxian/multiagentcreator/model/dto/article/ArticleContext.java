@@ -1,6 +1,7 @@
 package com.sxxian.multiagentcreator.model.dto.article;
 
 import lombok.Data;
+import com.sxxian.multiagentcreator.model.dto.review.ReviewResult;
 
 import java.io.Serial;
 import java.io.Serializable;
@@ -26,15 +27,25 @@ public class ArticleContext implements Serializable {
 
     private String style;
 
+    private String wordRange;
+
     private String phase;
 
     private List<ArticleState.TitleOption> titleOptions;
+
+    private ReviewResult titleReviewResult;
 
     private ArticleState.TitleResult title;
 
     private ArticleState.OutlineResult outline;
 
+    private ReviewResult outlineReviewResult;
+
     private String content;
+
+    private ReviewResult contentReviewResult;
+
+    private String reviewAdvice;
 
     private List<UserFeedback> feedbackHistory = new ArrayList<>();
 
@@ -44,11 +55,15 @@ public class ArticleContext implements Serializable {
         context.setTopic(state.getTopic());
         context.setUserDescription(state.getUserDescription());
         context.setStyle(state.getStyle());
+        context.setWordRange(state.getWordRange());
         context.setPhase(state.getPhase());
         context.setTitleOptions(state.getTitleOptions());
+        context.setTitleReviewResult(state.getTitleReviewResult());
         context.setTitle(state.getTitle());
         context.setOutline(state.getOutline());
+        context.setOutlineReviewResult(state.getOutlineReviewResult());
         context.setContent(state.getContent());
+        context.setContentReviewResult(state.getContentReviewResult());
         return context;
     }
 
@@ -57,11 +72,15 @@ public class ArticleContext implements Serializable {
         state.setTopic(topic);
         state.setUserDescription(userDescription);
         state.setStyle(style);
+        state.setWordRange(wordRange);
         state.setPhase(phase);
         state.setTitleOptions(titleOptions);
+        state.setTitleReviewResult(titleReviewResult);
         state.setTitle(title);
         state.setOutline(outline);
+        state.setOutlineReviewResult(outlineReviewResult);
         state.setContent(content);
+        state.setContentReviewResult(contentReviewResult);
     }
 
     public String getLatestFeedbackContent(String phase) {

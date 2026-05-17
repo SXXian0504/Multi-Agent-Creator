@@ -1,17 +1,22 @@
 package com.sxxian.multiagentcreator.service;
 
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
-import com.google.gson.JsonSyntaxException;
 import com.google.gson.reflect.TypeToken;
 import com.sxxian.multiagentcreator.agent.ArticleAgent;
+import com.sxxian.multiagentcreator.agent.ReviewAgent;
 import com.sxxian.multiagentcreator.annotation.AgentExecution;
 import com.sxxian.multiagentcreator.constant.PromptConstant;
+import com.sxxian.multiagentcreator.exception.ReviewRejectedException;
 import com.sxxian.multiagentcreator.model.dto.article.ArticleContext;
 import com.sxxian.multiagentcreator.model.dto.article.ArticleState;
 import com.sxxian.multiagentcreator.model.dto.image.ImageRequest;
+import com.sxxian.multiagentcreator.model.dto.review.ImageReviewResult;
+import com.sxxian.multiagentcreator.model.dto.review.ReviewResult;
 import com.sxxian.multiagentcreator.model.enums.ArticleStyleEnum;
 import com.sxxian.multiagentcreator.model.enums.ImageMethodEnum;
 import com.sxxian.multiagentcreator.model.enums.SseMessageTypeEnum;
+import com.sxxian.multiagentcreator.model.enums.StructuredOutputTypeEnum;
+import com.sxxian.multiagentcreator.utils.ArticlePromptUtils;
 import com.sxxian.multiagentcreator.utils.GsonUtils;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
@@ -41,6 +46,12 @@ public class ArticleAgentService {
     @Resource
     private ArticleAgent articleAgent;
 
+    @Resource
+    private JsonStructuredOutputService jsonStructuredOutputService;
+
+    @Resource
+    private ReviewAgent reviewAgent;
+
     /**
      * 阶段1：生成标题方案（3-5个）
      *
@@ -57,6 +68,7 @@ public class ArticleAgentService {
             log.info("阶段1：标题方案生成完成, taskId={}, optionsCount={}",
                     state.getTaskId(), state.getTitleOptions().size());
         } catch (Exception e) {
+            rethrowReviewRejected(e);
             log.error("阶段1：标题方案生成失败, taskId={}", state.getTaskId(), e);
             throw new RuntimeException("标题方案生成失败: " + e.getMessage(), e);
         }
@@ -77,6 +89,7 @@ public class ArticleAgentService {
             streamHandler.accept(SseMessageTypeEnum.AGENT2_COMPLETE.getValue());
             log.info("阶段2：大纲生成完成, taskId={}", state.getTaskId());
         } catch (Exception e) {
+            rethrowReviewRejected(e);
             log.error("阶段2：大纲生成失败, taskId={}", state.getTaskId(), e);
             throw new RuntimeException("大纲生成失败: " + e.getMessage(), e);
         }
@@ -116,6 +129,7 @@ public class ArticleAgentService {
 
             log.info("阶段3：正文生成完成, taskId={}", state.getTaskId());
         } catch (Exception e) {
+            rethrowReviewRejected(e);
             log.error("阶段3：正文生成失败, taskId={}", state.getTaskId(), e);
             throw new RuntimeException("正文生成失败: " + e.getMessage(), e);
         }
@@ -131,10 +145,12 @@ public class ArticleAgentService {
                 + getStylePrompt(state.getStyle());
 
         String content = callLlm(prompt);
-        List<ArticleState.TitleOption> titleOptions = parseJsonListResponse(
+        List<ArticleState.TitleOption> titleOptions = jsonStructuredOutputService.parse(
                 content,
                 new TypeToken<List<ArticleState.TitleOption>>(){},
-                "标题方案"
+                StructuredOutputTypeEnum.TITLE_OPTIONS,
+                () -> callLlm(prompt),
+                1
         );
         state.setTitleOptions(titleOptions);
         log.info("智能体1：标题方案生成成功, optionsCount={}", titleOptions.size());
@@ -156,10 +172,17 @@ public class ArticleAgentService {
                 .replace("{mainTitle}", state.getTitle().getMainTitle())
                 .replace("{subTitle}", state.getTitle().getSubTitle())
                 .replace("{descriptionSection}", descriptionSection)
+                + ArticlePromptUtils.getOutlineWordRangePrompt(state.getWordRange(), state.getStyle())
                 + getStylePrompt(state.getStyle());
 
         String content = callLlmWithStreaming(prompt, streamHandler, SseMessageTypeEnum.AGENT2_STREAMING);
-        ArticleState.OutlineResult outlineResult = parseJsonResponse(content, ArticleState.OutlineResult.class, "大纲");
+        ArticleState.OutlineResult outlineResult = jsonStructuredOutputService.parse(
+                content,
+                ArticleState.OutlineResult.class,
+                StructuredOutputTypeEnum.OUTLINE_RESULT,
+                () -> callLlmWithStreaming(prompt, streamHandler, SseMessageTypeEnum.AGENT2_STREAMING),
+                1
+        );
         state.setOutline(outlineResult);
         log.info("智能体2：大纲生成成功, sections={}", outlineResult.getSections().size());
     }
@@ -197,12 +220,7 @@ public class ArticleAgentService {
                 .replace("{availableMethods}", availableMethods)
                 .replace("{methodUsageGuide}", methodUsageGuide);
 
-        String content = callLlm(prompt);
-        ArticleState.Agent4Result agent4Result = parseJsonResponse(
-                content,
-                ArticleState.Agent4Result.class,
-                "配图需求"
-        );
+        ArticleState.Agent4Result agent4Result = generateImagePlan(prompt);
 
         // 更新正文为包含占位符的版本
         state.setContent(agent4Result.getContentWithPlaceholders());
@@ -214,8 +232,36 @@ public class ArticleAgentService {
         );
 
         state.setImageRequirements(validatedRequirements);
+        ReviewResult reviewResult = reviewAgent.reviewImagePlan(state);
+        state.setImagePlanReviewResult(reviewResult);
+        if (!reviewResult.isApprovedByThreshold()) {
+            String revisedPrompt = prompt + reviewAgent.buildRevisionAdvice(reviewResult);
+            agent4Result = generateImagePlan(revisedPrompt);
+            state.setContent(agent4Result.getContentWithPlaceholders());
+            validatedRequirements = validateAndFilterImageRequirements(
+                    agent4Result.getImageRequirements(),
+                    state.getEnabledImageMethods()
+            );
+            state.setImageRequirements(validatedRequirements);
+            reviewResult = reviewAgent.reviewImagePlan(state);
+            state.setImagePlanReviewResult(reviewResult);
+            if (!reviewResult.isApprovedByThreshold()) {
+                throw new ReviewRejectedException("IMAGE_REVIEWING", reviewResult);
+            }
+        }
         log.info("智能体4：配图需求分析成功, count={}, validated={}, 已在正文中插入占位符",
                 agent4Result.getImageRequirements().size(), validatedRequirements.size());
+    }
+
+    private ArticleState.Agent4Result generateImagePlan(String prompt) {
+        String content = callLlm(prompt);
+        return jsonStructuredOutputService.parse(
+                content,
+                ArticleState.Agent4Result.class,
+                StructuredOutputTypeEnum.IMAGE_PLAN,
+                () -> callLlm(prompt),
+                1
+        );
     }
 
     /**
@@ -224,6 +270,7 @@ public class ArticleAgentService {
     @AgentExecution(value = "agent5_generate_images", description = "生成配图", phase = "IMAGE_EXECUTING")
     public void agent5GenerateImages(ArticleState state, Consumer<String> streamHandler) {
         List<ArticleState.ImageResult> imageResults = new ArrayList<>();
+        List<ImageReviewResult> imageReviewResults = new ArrayList<>();
 
         for (ArticleState.ImageRequirement requirement : state.getImageRequirements()) {
             String imageSource = requirement.getImageSource();
@@ -247,6 +294,7 @@ public class ArticleAgentService {
             // 创建配图结果（URL 已经是 COS 地址）
             ArticleState.ImageResult imageResult = buildImageResult(requirement, cosUrl, method);
             imageResults.add(imageResult);
+            imageReviewResults.add(reviewAgent.reviewImageResult(state, requirement, imageResult));
 
             // 推送单张配图完成
             String imageCompleteMessage = SseMessageTypeEnum.IMAGE_COMPLETE.getStreamingPrefix() + GsonUtils.toJson(imageResult);
@@ -257,6 +305,7 @@ public class ArticleAgentService {
         }
 
         state.setImages(imageResults);
+        state.setImageReviewResults(imageReviewResults);
         log.info("智能体5：所有配图生成并上传完成, count={}", imageResults.size());
     }
 
@@ -318,30 +367,6 @@ public class ArticleAgentService {
                 .blockLast();
 
         return contentBuilder.toString();
-    }
-
-    /**
-     * 解析 JSON 响应
-     */
-    private <T> T parseJsonResponse(String content, Class<T> clazz, String name) {
-        try {
-            return GsonUtils.fromJson(content, clazz);
-        } catch (JsonSyntaxException e) {
-            log.error("{}解析失败, content={}", name, content, e);
-            throw new RuntimeException(name + "解析失败");
-        }
-    }
-
-    /**
-     * 解析 JSON 列表响应
-     */
-    private <T> T parseJsonListResponse(String content, TypeToken<T> typeToken, String name) {
-        try {
-            return GsonUtils.fromJson(content, typeToken);
-        } catch (JsonSyntaxException e) {
-            log.error("{}解析失败, content={}", name, content, e);
-            throw new RuntimeException(name + "解析失败");
-        }
     }
 
     /**
@@ -520,6 +545,7 @@ public class ArticleAgentService {
             case EMOTIONAL -> PromptConstant.STYLE_EMOTIONAL_PROMPT;
             case EDUCATIONAL -> PromptConstant.STYLE_EDUCATIONAL_PROMPT;
             case HUMOROUS -> PromptConstant.STYLE_HUMOROUS_PROMPT;
+            case MARKETING -> PromptConstant.STYLE_MARKETING_PROMPT;
         };
     }
 
@@ -545,7 +571,13 @@ public class ArticleAgentService {
                 .replace("{modifySuggestion}", modifySuggestion);
 
         String content = callLlm(prompt);
-        ArticleState.OutlineResult outlineResult = parseJsonResponse(content, ArticleState.OutlineResult.class, "修改后的大纲");
+        ArticleState.OutlineResult outlineResult = jsonStructuredOutputService.parse(
+                content,
+                ArticleState.OutlineResult.class,
+                StructuredOutputTypeEnum.OUTLINE_RESULT,
+                () -> callLlm(prompt),
+                1
+        );
 
         log.info("AI修改大纲成功, sectionsCount={}", outlineResult.getSections().size());
         return outlineResult.getSections();
@@ -562,6 +594,16 @@ public class ArticleAgentService {
             // 如果获取代理失败，返回 this（降级处理）
             log.warn("获取 AOP 代理对象失败，使用原始对象: {}", e.getMessage());
             return this;
+        }
+    }
+
+    private void rethrowReviewRejected(Exception e) {
+        Throwable current = e;
+        while (current != null) {
+            if (current instanceof ReviewRejectedException reviewRejectedException) {
+                throw reviewRejectedException;
+            }
+            current = current.getCause();
         }
     }
 

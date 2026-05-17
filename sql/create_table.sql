@@ -43,6 +43,7 @@ create table if not exists article
     taskId          varchar(64)                        not null comment '任务ID（UUID）',
     userId          bigint                             not null comment '用户ID',
     topic           varchar(500)                       not null comment '选题',
+    wordRange       varchar(20)                        null comment '字数范围：short/medium/long',
     mainTitle       varchar(200)                       null comment '主标题',
     subTitle        varchar(300)                       null comment '副标题',
     outline         json                               null comment '大纲（JSON格式）',

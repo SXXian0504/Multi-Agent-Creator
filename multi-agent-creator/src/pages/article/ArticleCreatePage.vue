@@ -59,18 +59,37 @@
                 class="topic-textarea"
               />
 
+              <!-- 字数范围选择 -->
+              <div class="word-range-section">
+                <div class="section-header">
+                  <span class="section-title">字数范围</span>
+                  <span class="section-tip">（不选择由 AI 根据选题和风格判断）</span>
+                </div>
+                <a-radio-group v-model:value="selectedWordRange" class="option-group">
+                  <a-radio
+                    v-for="wordRangeOption in wordRangeOptions"
+                    :key="wordRangeOption.value || 'auto'"
+                    :value="wordRangeOption.value"
+                  >
+                    {{ wordRangeOption.label }}
+                  </a-radio>
+                </a-radio-group>
+              </div>
+
               <!-- 文章风格选择 -->
               <div class="style-section">
                 <div class="section-header">
                   <span class="section-title">文章风格</span>
                   <span class="section-tip">（不选择使用默认风格）</span>
                 </div>
-                <a-radio-group v-model:value="selectedStyle" class="style-group">
-                  <a-radio value="">默认</a-radio>
-                  <a-radio value="tech">科技风格</a-radio>
-                  <a-radio value="emotional">情感风格</a-radio>
-                  <a-radio value="educational">教育风格</a-radio>
-                  <a-radio value="humorous">轻松幽默</a-radio>
+                <a-radio-group v-model:value="selectedStyle" class="style-group option-group">
+                  <a-radio
+                    v-for="styleOption in articleStyleOptions"
+                    :key="styleOption.value || 'default'"
+                    :value="styleOption.value"
+                  >
+                    {{ styleOption.label }}
+                  </a-radio>
                 </a-radio-group>
               </div>
 
@@ -596,11 +615,28 @@ const exampleTopics = [
   '健康饮食指南',
 ]
 
+const articleStyleOptions = [
+  { value: '', label: '默认' },
+  { value: 'tech', label: '科技风格' },
+  { value: 'marketing', label: '商品营销' },
+  { value: 'emotional', label: '情感风格' },
+  { value: 'educational', label: '教育风格' },
+  { value: 'humorous', label: '轻松幽默' },
+]
+
+const wordRangeOptions = [
+  { value: '', label: '自动评估' },
+  { value: 'short', label: '短文 200-500字' },
+  { value: 'medium', label: '中篇 800-1500字' },
+  { value: 'long', label: '长文 2000-3500字' },
+]
+
 // 阶段状态
 const currentPhase = ref<string>('INPUT')  // INPUT, TITLE_SELECTING, OUTLINE_EDITING, CONTENT_GENERATING, COMPLETED
 
 // 状态
 const topic = ref('')
+const selectedWordRange = ref('')  // 选中的字数范围（空字符串表示由 AI 自动评估）
 const selectedStyle = ref('')  // 选中的文章风格（空字符串表示默认）
 const selectedImageMethods = ref<string[]>([])  // 选中的配图方式（空数组表示全部）
 const isCreating = ref(false)
@@ -734,6 +770,7 @@ const startCreate = async () => {
     const res = await createArticle({
       topic: topic.value,
       style: selectedStyle.value || undefined,
+      wordRange: selectedWordRange.value || undefined,
       enabledImageMethods: selectedImageMethods.value.length > 0 ? selectedImageMethods.value : undefined
     })
     const newTaskId = res.data.data
@@ -875,6 +912,10 @@ const handleSSEMessage = (msg: SSEMessage) => {
       addLog('✨ 文章创作完成！', 'success')
       break
 
+    case 'REVIEW_COMPLETE':
+      addReviewLog(msg)
+      break
+
     case 'ERROR':
       errorMessage.value = msg.message || '创作失败'
       errorVisible.value = true
@@ -883,6 +924,28 @@ const handleSSEMessage = (msg: SSEMessage) => {
       addLog(`创作失败: ${msg.message || '未知错误'}`, 'error')
       break
   }
+}
+
+const addReviewLog = (msg: SSEMessage) => {
+  const review = msg.reviewResult || {}
+  const score = review.score ?? '-'
+  const approved = review.approved ? '通过' : '未通过'
+  const phase = getReviewPhaseText(msg.phase || '')
+  const firstProblem = Array.isArray(review.problems) && review.problems.length > 0
+    ? `：${review.problems[0]}`
+    : ''
+  addLog(`${phase}评审${approved}，评分 ${score}/100${firstProblem}`, review.approved ? 'success' : 'error')
+}
+
+const getReviewPhaseText = (phase: string) => {
+  const phaseMap: Record<string, string> = {
+    TITLE_REVIEWING: '标题',
+    OUTLINE_REVIEWING: '大纲',
+    CONTENT_REVIEWING: '正文',
+    IMAGE_REVIEWING: '配图',
+    FAILED: '阶段'
+  }
+  return phaseMap[phase] || '阶段'
 }
 
 // 确认标题
@@ -1247,7 +1310,8 @@ onBeforeUnmount(() => {
   font-size: 13px;
 }
 
-/* 文章风格选择 */
+/* 字数范围和文章风格选择 */
+.word-range-section,
 .style-section {
   padding: 16px;
   background: var(--color-background-secondary);
@@ -1255,27 +1319,33 @@ onBeforeUnmount(() => {
   border: 1px solid var(--color-border-light);
 }
 
-.style-group {
+.option-group {
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
+  width: 100%;
 }
 
-.style-group :deep(.ant-radio-wrapper) {
+.option-group :deep(.ant-radio-wrapper) {
+  display: inline-flex;
+  align-items: center;
   margin: 0;
   padding: 6px 12px;
+  min-height: 38px;
   background: white;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
+  line-height: 1.4;
+  white-space: nowrap;
   transition: all 0.2s;
 }
 
-.style-group :deep(.ant-radio-wrapper:hover) {
+.option-group :deep(.ant-radio-wrapper:hover) {
   border-color: var(--color-primary);
   background: #FFF8E7;
 }
 
-.style-group :deep(.ant-radio-wrapper-checked) {
+.option-group :deep(.ant-radio-wrapper-checked) {
   border-color: var(--color-primary);
   background: #FFF8E7;
 }

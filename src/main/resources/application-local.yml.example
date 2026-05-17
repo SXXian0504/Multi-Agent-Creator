@@ -4,6 +4,11 @@ spring:
     dashscope:
       api-key: your-dashscope-api-key  # 请在 https://bailian.console.aliyun.com/?apiKey=1&tab=api#/api 获取
 
+article:
+  review:
+    text-model: qwen-max
+    image-model: qwen-vl-plus-latest
+
 # Pexels API 配置
 pexels:
   api-key: ${PEXELS_API_KEY:xxx}

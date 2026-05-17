@@ -62,6 +62,8 @@ public class ArticleController {
         // 校验风格参数（允许为空）
         ThrowUtils.throwIf(!ArticleStyleEnum.isValid(request.getStyle()),
                 ErrorCode.PARAMS_ERROR, "无效的文章风格");
+        ThrowUtils.throwIf(!isValidWordRange(request.getWordRange()),
+                ErrorCode.PARAMS_ERROR, "无效的字数范围");
 
         User loginUser = userService.getLoginUser(httpServletRequest);
 
@@ -69,6 +71,7 @@ public class ArticleController {
         String taskId = articleService.createArticleTaskWithQuotaCheck(
                 request.getTopic(),
                 request.getStyle(),
+                request.getWordRange(),
                 request.getEnabledImageMethods(),
                 loginUser
         );
@@ -77,10 +80,19 @@ public class ArticleController {
         articleAsyncService.executePhase1(
                 taskId,
                 request.getTopic(),
-                request.getStyle()
+                request.getStyle(),
+                request.getWordRange()
         );
 
         return ResultUtils.success(taskId);
+    }
+
+    private boolean isValidWordRange(String wordRange) {
+        return wordRange == null
+                || wordRange.isBlank()
+                || "short".equals(wordRange)
+                || "medium".equals(wordRange)
+                || "long".equals(wordRange);
     }
 
     /**

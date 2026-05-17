@@ -8,8 +8,10 @@ import com.sxxian.multiagentcreator.agent.agents.*;
 import com.sxxian.multiagentcreator.agent.config.AgentConfig;
 import com.sxxian.multiagentcreator.agent.context.StreamHandlerContext;
 import com.sxxian.multiagentcreator.agent.parallel.ParallelImageGenerator;
+import com.sxxian.multiagentcreator.exception.ReviewRejectedException;
 import com.sxxian.multiagentcreator.model.dto.article.ArticleState;
 import com.sxxian.multiagentcreator.model.enums.SseMessageTypeEnum;
+import com.sxxian.multiagentcreator.utils.GsonUtils;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -54,15 +56,21 @@ public class ArticleAgentOrchestrator {
     private static final String KEY_TASK_ID = "taskId";
     private static final String KEY_TOPIC = "topic";
     private static final String KEY_STYLE = "style";
+    private static final String KEY_WORD_RANGE = "wordRange";
     private static final String KEY_USER_DESCRIPTION = "userDescription";
     private static final String KEY_MAIN_TITLE = "mainTitle";
     private static final String KEY_SUB_TITLE = "subTitle";
     private static final String KEY_TITLE_OPTIONS = "titleOptions";
+    private static final String KEY_TITLE_REVIEW_RESULT = "titleReviewResult";
     private static final String KEY_OUTLINE = "outline";
+    private static final String KEY_OUTLINE_REVIEW_RESULT = "outlineReviewResult";
     private static final String KEY_CONTENT = "content";
+    private static final String KEY_CONTENT_REVIEW_RESULT = "contentReviewResult";
     private static final String KEY_CONTENT_WITH_PLACEHOLDERS = "contentWithPlaceholders";
     private static final String KEY_IMAGE_REQUIREMENTS = "imageRequirements";
+    private static final String KEY_IMAGE_PLAN_REVIEW_RESULT = "imagePlanReviewResult";
     private static final String KEY_IMAGES = "images";
+    private static final String KEY_IMAGE_REVIEW_RESULTS = "imageReviewResults";
     private static final String KEY_FULL_CONTENT = "fullContent";
     private static final String KEY_ENABLED_IMAGE_METHODS = "enabledImageMethods";
 
@@ -84,6 +92,7 @@ public class ArticleAgentOrchestrator {
             inputs.put(KEY_TASK_ID, state.getTaskId());
             inputs.put(KEY_TOPIC, state.getTopic());
             inputs.put(KEY_STYLE, state.getStyle());
+            inputs.put(KEY_WORD_RANGE, state.getWordRange());
 
             // 构建并执行图
             StateGraph graph = buildPhase1Graph();
@@ -101,6 +110,10 @@ public class ArticleAgentOrchestrator {
 
                 if (titleOptions != null) {
                     state.setTitleOptions(titleOptions);
+                    finalState.value(KEY_TITLE_REVIEW_RESULT)
+                            .ifPresent(v -> state.setTitleReviewResult(
+                                    GsonUtils.fromJson(GsonUtils.toJson(v),
+                                            com.sxxian.multiagentcreator.model.dto.review.ReviewResult.class)));
                     streamHandler.accept(SseMessageTypeEnum.AGENT1_COMPLETE.getValue());
                     log.info("阶段1（多智能体编排）：标题方案生成完成, 数量={}", titleOptions.size());
                 } else {
@@ -111,6 +124,7 @@ public class ArticleAgentOrchestrator {
             }
 
         } catch (Exception e) {
+            rethrowReviewRejected(e);
             log.error("阶段1（多智能体编排）：标题方案生成失败, taskId={}", state.getTaskId(), e);
             throw new RuntimeException("标题方案生成失败: " + e.getMessage(), e);
         }
@@ -133,10 +147,12 @@ public class ArticleAgentOrchestrator {
             // 构建输入状态
             Map<String, Object> inputs = new HashMap<>();
             inputs.put(KEY_TASK_ID, state.getTaskId());
+            inputs.put(KEY_TOPIC, state.getTopic());
             inputs.put(KEY_MAIN_TITLE, state.getTitle().getMainTitle());
             inputs.put(KEY_SUB_TITLE, state.getTitle().getSubTitle());
             inputs.put(KEY_USER_DESCRIPTION, state.getUserDescription());
             inputs.put(KEY_STYLE, state.getStyle());
+            inputs.put(KEY_WORD_RANGE, state.getWordRange());
 
             // 构建并执行图
             StateGraph graph = buildPhase2Graph();
@@ -158,6 +174,10 @@ public class ArticleAgentOrchestrator {
 
                 if (outline != null) {
                     state.setOutline(outline);
+                    finalState.value(KEY_OUTLINE_REVIEW_RESULT)
+                            .ifPresent(v -> state.setOutlineReviewResult(
+                                    GsonUtils.fromJson(GsonUtils.toJson(v),
+                                            com.sxxian.multiagentcreator.model.dto.review.ReviewResult.class)));
                     streamHandler.accept(SseMessageTypeEnum.AGENT2_COMPLETE.getValue());
                     log.info("阶段2（多智能体编排）：大纲生成完成, 章节数={}", outline.getSections().size());
                 } else {
@@ -168,6 +188,7 @@ public class ArticleAgentOrchestrator {
             }
 
         } catch (Exception e) {
+            rethrowReviewRejected(e);
             log.error("阶段2（多智能体编排）：大纲生成失败, taskId={}", state.getTaskId(), e);
             throw new RuntimeException("大纲生成失败: " + e.getMessage(), e);
         } finally {
@@ -193,10 +214,13 @@ public class ArticleAgentOrchestrator {
             // 构建输入状态（不再包含 streamHandler，避免序列化问题）
             Map<String, Object> inputs = new HashMap<>();
             inputs.put(KEY_TASK_ID, state.getTaskId());
+            inputs.put(KEY_TOPIC, state.getTopic());
             inputs.put(KEY_MAIN_TITLE, state.getTitle().getMainTitle());
             inputs.put(KEY_SUB_TITLE, state.getTitle().getSubTitle());
             inputs.put(KEY_OUTLINE, state.getOutline());
             inputs.put(KEY_STYLE, state.getStyle());
+            inputs.put(KEY_WORD_RANGE, state.getWordRange());
+            inputs.put(KEY_USER_DESCRIPTION, state.getUserDescription());
             inputs.put(KEY_ENABLED_IMAGE_METHODS, state.getEnabledImageMethods());
 
             // 构建并执行图
@@ -241,15 +265,27 @@ public class ArticleAgentOrchestrator {
                 } else if (content != null) {
                     state.setContent(content);
                 }
+                finalState.value(KEY_CONTENT_REVIEW_RESULT)
+                        .ifPresent(v -> state.setContentReviewResult(
+                                GsonUtils.fromJson(GsonUtils.toJson(v),
+                                        com.sxxian.multiagentcreator.model.dto.review.ReviewResult.class)));
                 streamHandler.accept(SseMessageTypeEnum.AGENT3_COMPLETE.getValue());
 
                 if (imageRequirements != null) {
                     state.setImageRequirements(imageRequirements);
+                    finalState.value(KEY_IMAGE_PLAN_REVIEW_RESULT)
+                            .ifPresent(v -> state.setImagePlanReviewResult(
+                                    GsonUtils.fromJson(GsonUtils.toJson(v),
+                                            com.sxxian.multiagentcreator.model.dto.review.ReviewResult.class)));
                     streamHandler.accept(SseMessageTypeEnum.AGENT4_COMPLETE.getValue());
                 }
 
                 if (images != null) {
                     state.setImages(images);
+                    finalState.value(KEY_IMAGE_REVIEW_RESULTS)
+                            .ifPresent(v -> state.setImageReviewResults(
+                                    GsonUtils.fromJson(GsonUtils.toJson(v),
+                                            new com.google.gson.reflect.TypeToken<List<com.sxxian.multiagentcreator.model.dto.review.ImageReviewResult>>() {}.getType())));
                     streamHandler.accept(SseMessageTypeEnum.AGENT5_COMPLETE.getValue());
                 }
 
@@ -267,6 +303,7 @@ public class ArticleAgentOrchestrator {
             }
 
         } catch (Exception e) {
+            rethrowReviewRejected(e);
             log.error("阶段3（多智能体编排）：正文+配图生成失败, taskId={}", state.getTaskId(), e);
             throw new RuntimeException("正文+配图生成失败: " + e.getMessage(), e);
         } finally {
@@ -332,19 +369,35 @@ public class ArticleAgentOrchestrator {
             strategies.put(KEY_TASK_ID, new ReplaceStrategy());
             strategies.put(KEY_TOPIC, new ReplaceStrategy());
             strategies.put(KEY_STYLE, new ReplaceStrategy());
+            strategies.put(KEY_WORD_RANGE, new ReplaceStrategy());
             strategies.put(KEY_USER_DESCRIPTION, new ReplaceStrategy());
             strategies.put(KEY_MAIN_TITLE, new ReplaceStrategy());
             strategies.put(KEY_SUB_TITLE, new ReplaceStrategy());
             strategies.put(KEY_TITLE_OPTIONS, new ReplaceStrategy());
+            strategies.put(KEY_TITLE_REVIEW_RESULT, new ReplaceStrategy());
             strategies.put(KEY_OUTLINE, new ReplaceStrategy());
+            strategies.put(KEY_OUTLINE_REVIEW_RESULT, new ReplaceStrategy());
             strategies.put(KEY_CONTENT, new ReplaceStrategy());
+            strategies.put(KEY_CONTENT_REVIEW_RESULT, new ReplaceStrategy());
             strategies.put(KEY_CONTENT_WITH_PLACEHOLDERS, new ReplaceStrategy());
             strategies.put(KEY_IMAGE_REQUIREMENTS, new ReplaceStrategy());
+            strategies.put(KEY_IMAGE_PLAN_REVIEW_RESULT, new ReplaceStrategy());
             strategies.put(KEY_IMAGES, new ReplaceStrategy());
+            strategies.put(KEY_IMAGE_REVIEW_RESULTS, new ReplaceStrategy());
             strategies.put(KEY_FULL_CONTENT, new ReplaceStrategy());
             strategies.put(KEY_ENABLED_IMAGE_METHODS, new ReplaceStrategy());
             return strategies;
         };
+    }
+
+    private void rethrowReviewRejected(Exception e) {
+        Throwable current = e;
+        while (current != null) {
+            if (current instanceof ReviewRejectedException reviewRejectedException) {
+                throw reviewRejectedException;
+            }
+            current = current.getCause();
+        }
     }
 
     // endregion

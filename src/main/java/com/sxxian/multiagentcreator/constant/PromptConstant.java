@@ -52,9 +52,9 @@ public interface PromptConstant {
             
             要求:
             1. 大纲要有清晰的逻辑结构
-            2. 包含开头引入、核心观点(3-5个)、结尾升华
-            3. 每个章节要有明确的标题和核心要点(2-3个)
-            4. 适合2000字左右的文章
+            2. 章节数量、章节边界和要点密度必须服务于选题、风格和用户选择的字数范围
+            3. 每个章节要有明确的标题和核心要点，短文要压缩要点，长文可以展开层次
+            4. 如果后续字数范围要求给出更具体的章节数量和要点数量，请优先遵守字数范围要求
             
             请直接返回 JSON 格式,不要有其他内容:
             {
@@ -124,7 +124,7 @@ public interface PromptConstant {
             {outline}
             
             要求:
-            1. 内容要充实,每个章节300-400字
+            1. 内容详略应匹配选题、大纲、文章风格和用户选择的字数范围
             2. 语言流畅,富有感染力
             3. 适当使用金句,增强可读性
             4. 添加过渡句,确保逻辑连贯
@@ -258,6 +258,131 @@ public interface PromptConstant {
             - 适当自嘲或调侃，增加趣味性
             - 内容轻松易读，让读者在愉快中获取信息
             - 可加入一些有趣的段子或梗，但不失专业性
+            """;
+
+    /**
+     * 用户选择的字数范围附加 Prompt。
+     */
+    String WORD_RANGE_PROMPT = """
+            
+            **字数范围要求**
+            {wordRangeInstruction}
+            """;
+
+    /**
+     * 商品营销风格 Prompt 附加
+     */
+    String STYLE_MARKETING_PROMPT = """
+            
+            **重要：请使用商品营销风格进行创作**
+            - 明确目标用户、使用场景和核心痛点
+            - 用利益表达承接卖点，让读者理解产品能带来的具体改变
+            - 建立信任感，可使用合理的场景、案例、机制说明或风险提示
+            - 结尾提供自然、具体、不过度强迫的行动引导
+            - 禁止虚假承诺、夸大疗效、不可验证数据和制造焦虑式营销
+            """;
+
+    /**
+     * 通用评审 Prompt。根据 stage、styleRubric、stageRubric 组合使用。
+     */
+    String REVIEW_PROMPT = """
+            你是内容质量评审智能体，只负责语义质量评审，不负责基础 JSON 格式校验。
+            
+            评审对象阶段：{stageName}
+            当前文章风格：{styleName}
+            主题：{topic}
+            主标题：{mainTitle}
+            副标题：{subTitle}
+            用户补充要求：{userDescription}
+            
+            【内容结构画像】
+            {contentProfile}
+            
+            【待评审内容】
+            {content}
+            
+            【评分规则】
+            总分 100，80 分及以上通过。
+            
+            通用底线 40 分：
+            - 主题相关性 10：是否紧扣选题、标题和用户补充要求。
+            - 结构完整性 10：标题、大纲、正文是否前后一致，段落推进是否清楚。
+            - 表达清晰度 10：语言是否顺畅、可读、无明显重复或跳跃。
+            - 合规与事实底线 10：不得编造明确事实、不得出现明显违法违规或危险建议。
+            
+            风格特化 45 分：
+            {styleRubric}
+            
+            阶段适配 15 分：
+            {stageRubric}
+            
+            【分数校准】
+            - 95-100：几乎无需修改，且能指出待评审内容中至少 3 个具体亮点。
+            - 88-94：质量较高，仅有轻微优化点。
+            - 80-87：基本可用，但必须指出至少 1 个具体缺陷和 1 个具体修改建议。
+            - 70-79：结构、风格或内容价值存在明显短板，应进入 REVISE。
+            - 60-69：多处关键缺陷，读者价值或可写性不足。
+            - 0-59：明显跑题、空泛、缺失核心内容或存在严重风险。
+            
+            要求：
+            1. approved 必须等于 score >= 80。
+            2. dimensionScores 使用英文 key，分数为整数，且 commonBaseline + styleFit + stageFit 必须等于 score。
+            3. problems 必须指出具体问题，不要空泛；如果 score < 95，problems 不能为空。
+            4. suggestions 必须能直接作为被评审 Agent 的下一轮改进方向；如果 score < 95，suggestions 不能为空。
+            5. nextAction 只能取 APPROVE、REVISE、FALLBACK、USER_CONFIRM。
+            6. 必须根据待评审内容逐项独立打分，禁止照抄示例分数或固定输出同一分数。
+            7. 禁止把 85 当作默认分。只有在内容“基本可用但存在明确轻微缺陷”时才能给 85，并且必须在 problems 中写出该缺陷对应的具体内容。
+            8. problems 和 suggestions 必须引用或复述待评审内容中的具体标题、章节、段落、卖点、论据或表达问题，不能只写“建议优化结构/增强吸引力”这类泛化意见。
+            
+            请直接返回 JSON，不要输出其他内容。JSON 字段必须包含：
+            - approved: boolean
+            - score: 0 到 100 的整数
+            - dimensionScores.commonBaseline: 0 到 40 的整数
+            - dimensionScores.styleFit: 0 到 45 的整数
+            - dimensionScores.stageFit: 0 到 15 的整数
+            - problems: 字符串数组，指出具体问题
+            - suggestions: 字符串数组，给出可直接执行的修改建议
+            - nextAction: APPROVE、REVISE、FALLBACK、USER_CONFIRM 之一
+            """;
+
+    /**
+     * 图片结果评审 Prompt。
+     */
+    String IMAGE_REVIEW_PROMPT = """
+            你是图片质量评审智能体，负责判断图片结果是否满足文章配图需求。
+            
+            主题：{topic}
+            主标题：{mainTitle}
+            正文片段或章节：{sectionTitle}
+            
+            【配图需求】
+            {imageRequirement}
+            
+            【图片结果】
+            {imageResult}
+            
+            【评分规则】
+            总分 100，80 分及以上通过。
+            - 相关性 30：图片是否匹配章节、关键词、prompt 和正文位置。
+            - 可用性 25：URL、方法、描述等结果是否可用于图文合成。
+            - 视觉质量 25：是否适合文章阅读场景，避免明显低质、跑题或违和。
+            - 位置匹配 20：是否与 placeholder、position、sectionTitle 一致。
+            
+            要求：
+            1. approved 必须等于 score >= 80。
+            2. observation 描述图片当前问题或通过原因。
+            3. revisionAdvice 给出后续重规划时可直接使用的建议。
+            4. nextAction 只能取 APPROVE、REPLAN、FALLBACK、USER_CONFIRM。
+            5. 必须结合图片 URL 对应的实际视觉内容和配图需求打分，禁止固定输出同一分数。
+            
+            请直接返回 JSON，不要输出其他内容。JSON 字段必须包含：
+            - approved: boolean
+            - score: 0 到 100 的整数
+            - problems: 字符串数组，指出具体问题
+            - suggestions: 字符串数组，给出具体建议
+            - nextAction: APPROVE、REPLAN、FALLBACK、USER_CONFIRM 之一
+            - observation: 图片当前问题或通过原因
+            - revisionAdvice: 后续重规划时可直接使用的建议
             """;
 
     /**

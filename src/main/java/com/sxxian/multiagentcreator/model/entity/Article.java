@@ -55,9 +55,14 @@ public class Article implements Serializable {
     private String enabledImageMethods;
 
     /**
-     * 文章风格：tech/emotional/educational/humorous，可为空
+     * 文章风格：tech/marketing/emotional/educational/humorous，可为空
      */
     private String style;
+
+    /**
+     * 字数范围：short/medium/long，可为空
+     */
+    private String wordRange;
 
     /**
      * 主标题

@@ -83,6 +83,7 @@ public class TitleGeneratorAgent implements NodeAction {
             case EMOTIONAL -> PromptConstant.STYLE_EMOTIONAL_PROMPT;
             case EDUCATIONAL -> PromptConstant.STYLE_EDUCATIONAL_PROMPT;
             case HUMOROUS -> PromptConstant.STYLE_HUMOROUS_PROMPT;
+            case MARKETING -> PromptConstant.STYLE_MARKETING_PROMPT;
         };
     }
 }

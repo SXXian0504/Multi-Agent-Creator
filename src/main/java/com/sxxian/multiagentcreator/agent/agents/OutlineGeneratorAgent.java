@@ -8,6 +8,7 @@ import com.sxxian.multiagentcreator.constant.PromptConstant;
 import com.sxxian.multiagentcreator.model.dto.article.ArticleState;
 import com.sxxian.multiagentcreator.model.enums.ArticleStyleEnum;
 import com.sxxian.multiagentcreator.model.enums.SseMessageTypeEnum;
+import com.sxxian.multiagentcreator.utils.ArticlePromptUtils;
 import com.sxxian.multiagentcreator.utils.GsonUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,6 +36,7 @@ public class OutlineGeneratorAgent implements NodeAction {
     public static final String INPUT_SUB_TITLE = "subTitle";
     public static final String INPUT_USER_DESCRIPTION = "userDescription";
     public static final String INPUT_STYLE = "style";
+    public static final String INPUT_WORD_RANGE = "wordRange";
     public static final String OUTPUT_OUTLINE = "outline";
 
     @Override
@@ -55,6 +57,10 @@ public class OutlineGeneratorAgent implements NodeAction {
                 .map(Object::toString)
                 .orElse(null);
 
+        String wordRange = state.value(INPUT_WORD_RANGE)
+                .map(Object::toString)
+                .orElse(null);
+
         log.info("OutlineGeneratorAgent 开始执行: mainTitle={}, subTitle={}", mainTitle, subTitle);
 
         // 构建用户描述部分
@@ -69,6 +75,7 @@ public class OutlineGeneratorAgent implements NodeAction {
                 .replace("{mainTitle}", mainTitle)
                 .replace("{subTitle}", subTitle)
                 .replace("{descriptionSection}", descriptionSection)
+                + ArticlePromptUtils.getOutlineWordRangePrompt(wordRange, style)
                 + getStylePrompt(style);
 
         // 获取流式处理器
@@ -132,6 +139,8 @@ public class OutlineGeneratorAgent implements NodeAction {
             case EMOTIONAL -> PromptConstant.STYLE_EMOTIONAL_PROMPT;
             case EDUCATIONAL -> PromptConstant.STYLE_EDUCATIONAL_PROMPT;
             case HUMOROUS -> PromptConstant.STYLE_HUMOROUS_PROMPT;
+            case MARKETING -> PromptConstant.STYLE_MARKETING_PROMPT;
         };
     }
+
 }

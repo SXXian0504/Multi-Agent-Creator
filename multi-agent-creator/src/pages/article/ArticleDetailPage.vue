@@ -106,6 +106,20 @@
                       <div v-if="log.errorMessage" class="error-message">
                         <CloseCircleOutlined /> {{ log.errorMessage }}
                       </div>
+                      <div v-if="getReviewOutput(log)" class="review-output">
+                        <div class="review-header">
+                          <span>评审 {{ getReviewOutput(log)?.approved ? '通过' : '未通过' }}</span>
+                          <a-tag :color="getReviewOutput(log)?.approved ? 'success' : 'error'">
+                            {{ getReviewOutput(log)?.score ?? '-' }}/100
+                          </a-tag>
+                        </div>
+                        <div v-if="getReviewOutput(log)?.problems?.length" class="review-line">
+                          问题：{{ getReviewOutput(log)?.problems?.join('；') }}
+                        </div>
+                        <div v-if="getReviewOutput(log)?.suggestions?.length" class="review-line">
+                          建议：{{ getReviewOutput(log)?.suggestions?.join('；') }}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -323,9 +337,27 @@ const getAgentDisplayName = (agentName: string) => {
     'agent4_analyze_image_requirements': '分析配图需求',
     'agent5_generate_images': '生成配图',
     'agent6_merge_content': '图文合成',
-    'ai_modify_outline': 'AI修改大纲'
+    'ai_modify_outline': 'AI修改大纲',
+    'review_titles': '评审标题',
+    'review_outline': '评审大纲',
+    'review_content': '评审正文',
+    'review_image_plan': '评审配图计划',
+    'review_image_result': '评审图片结果'
   }
   return nameMap[agentName] || agentName
+}
+
+const getReviewOutput = (log: API.AgentLog) => {
+  if (!log.outputData) return null
+  try {
+    const parsed = JSON.parse(log.outputData)
+    if (typeof parsed?.score === 'number' && typeof parsed?.approved === 'boolean') {
+      return parsed
+    }
+    return null
+  } catch {
+    return null
+  }
 }
 
 // 重试（重新创建文章）
@@ -674,6 +706,32 @@ onMounted(() => {
             .anticon {
               flex-shrink: 0;
               margin-top: 2px;
+            }
+          }
+
+          .review-output {
+            margin-top: 10px;
+            padding: 10px 12px;
+            background: var(--color-background-secondary);
+            border-radius: var(--radius-md);
+            border-left: 3px solid var(--color-primary);
+
+            .review-header {
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              gap: 8px;
+              margin-bottom: 6px;
+              font-size: 13px;
+              font-weight: 600;
+              color: var(--color-text);
+            }
+
+            .review-line {
+              font-size: 12px;
+              color: var(--color-text-secondary);
+              line-height: 1.6;
+              margin-top: 4px;
             }
           }
         }

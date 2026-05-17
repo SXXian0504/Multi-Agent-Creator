@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TitleOptions",
+  "type": "array",
+  "minItems": 3,
+  "maxItems": 5,
+  "items": {
+    "type": "object",
+    "required": ["mainTitle", "subTitle"],
+    "properties": {
+      "mainTitle": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 30
+      },
+      "subTitle": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  }
+}

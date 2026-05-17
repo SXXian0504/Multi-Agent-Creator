@@ -20,6 +20,8 @@ declare namespace API {
     prompt?: string
     inputData?: string
     outputData?: string
+    phase?: string
+    metadata?: string
     createTime?: string
     updateTime?: string
     isDelete?: number
@@ -45,6 +47,7 @@ declare namespace API {
   type ArticleCreateRequest = {
     topic?: string
     style?: string
+    wordRange?: string
     enabledImageMethods?: string[]
   }
 

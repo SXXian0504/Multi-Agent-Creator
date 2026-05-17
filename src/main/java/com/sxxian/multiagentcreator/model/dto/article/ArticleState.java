@@ -1,6 +1,8 @@
 package com.sxxian.multiagentcreator.model.dto.article;
 
 import lombok.Data;
+import com.sxxian.multiagentcreator.model.dto.review.ImageReviewResult;
+import com.sxxian.multiagentcreator.model.dto.review.ReviewResult;
 
 import java.io.Serializable;
 import java.util.List;
@@ -30,6 +32,11 @@ public class ArticleState implements Serializable {
     private String style;
 
     /**
+     * 字数范围：short/medium/long，可为空
+     */
+    private String wordRange;
+
+    /**
      * 当前阶段
      */
     private String phase;
@@ -38,6 +45,11 @@ public class ArticleState implements Serializable {
      * 标题方案列表（智能体1输出）
      */
     private List<TitleOption> titleOptions;
+
+    /**
+     * 标题候选评审结果
+     */
+    private ReviewResult titleReviewResult;
 
     /**
      * 标题结果（智能体1输出）
@@ -50,14 +62,29 @@ public class ArticleState implements Serializable {
     private OutlineResult outline;
 
     /**
+     * 大纲评审结果
+     */
+    private ReviewResult outlineReviewResult;
+
+    /**
      * 正文内容（智能体3输出）
      */
     private String content;
 
     /**
+     * 正文评审结果
+     */
+    private ReviewResult contentReviewResult;
+
+    /**
      * 配图需求列表（智能体4输出）
      */
     private List<ImageRequirement> imageRequirements;
+
+    /**
+     * 配图计划评审结果
+     */
+    private ReviewResult imagePlanReviewResult;
 
     /**
      * 封面图 URL（单独存储，同时 images 列表中的 position=1 也是封面图）
@@ -68,6 +95,11 @@ public class ArticleState implements Serializable {
      * 配图结果列表（智能体5输出）
      */
     private List<ImageResult> images;
+
+    /**
+     * 图片结果评审结果
+     */
+    private List<ImageReviewResult> imageReviewResults;
 
     /**
      * 允许的配图方式列表（为空表示支持所有方式）

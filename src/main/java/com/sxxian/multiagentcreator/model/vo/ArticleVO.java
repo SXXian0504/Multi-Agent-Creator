@@ -39,6 +39,11 @@ public class ArticleVO implements Serializable {
     private String userDescription;
 
     /**
+     * 字数范围
+     */
+    private String wordRange;
+
+    /**
      * 主标题
      */
     private String mainTitle;

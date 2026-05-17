@@ -93,3 +93,8 @@ article:
       enabled: true
     # Agent 最大迭代次数
     max-iterations: 10
+  review:
+    # 文本评审使用高阶文本模型，避免纯文本评审误走视觉模型触发图片 URL 校验
+    text-model: qwen-max
+    # 图片结果评审使用多模态模型
+    image-model: qwen-vl-plus-latest

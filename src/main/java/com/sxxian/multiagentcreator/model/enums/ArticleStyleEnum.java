@@ -16,7 +16,8 @@ public enum ArticleStyleEnum {
     TECH("tech", "科技风格"),
     EMOTIONAL("emotional", "情感风格"),
     EDUCATIONAL("educational", "教育风格"),
-    HUMOROUS("humorous", "轻松幽默风格");
+    HUMOROUS("humorous", "轻松幽默风格"),
+    MARKETING("marketing", "商品营销风格");
 
     private final String value;
     private final String text;

@@ -3,8 +3,11 @@ package com.sxxian.multiagentcreator.service;
 import com.google.gson.reflect.TypeToken;
 import com.sxxian.multiagentcreator.agent.ArticleAgentOrchestrator;
 import com.sxxian.multiagentcreator.agent.config.AgentConfig;
+import com.sxxian.multiagentcreator.exception.ReviewRejectedException;
 import com.sxxian.multiagentcreator.manager.SseEmitterManager;
 import com.sxxian.multiagentcreator.model.dto.article.ArticleState;
+import com.sxxian.multiagentcreator.model.dto.review.ImageReviewResult;
+import com.sxxian.multiagentcreator.model.dto.review.ReviewResult;
 import com.sxxian.multiagentcreator.model.entity.Article;
 import com.sxxian.multiagentcreator.model.enums.ArticlePhaseEnum;
 import com.sxxian.multiagentcreator.model.enums.ArticleStatusEnum;
@@ -53,12 +56,13 @@ public class ArticleAsyncService {
      * @param taskId 任务ID
      * @param topic  选题
      * @param style  文章风格（可为空）
+     * @param wordRange 字数范围（可为空）
      */
     @Async("articleExecutor")
-    public void executePhase1(String taskId, String topic, String style) {
+    public void executePhase1(String taskId, String topic, String style, String wordRange) {
         boolean useOrchestrator = agentConfig.isOrchestratorEnabled();
-        log.info("阶段1异步任务开始, taskId={}, topic={}, style={}, 使用多智能体编排={}",
-                taskId, topic, style, useOrchestrator);
+        log.info("阶段1异步任务开始, taskId={}, topic={}, style={}, wordRange={}, 使用多智能体编排={}",
+                taskId, topic, style, wordRange, useOrchestrator);
 
         try {
             // 更新状态和阶段
@@ -70,6 +74,7 @@ public class ArticleAsyncService {
             state.setTaskId(taskId);
             state.setTopic(topic);
             state.setStyle(style);
+            state.setWordRange(wordRange);
 
             // 执行阶段1：生成标题方案（根据配置选择执行方式）
             if (useOrchestrator) {
@@ -81,6 +86,7 @@ public class ArticleAsyncService {
                     handleAgentMessage(taskId, message, state);
                 });
             }
+            sendReviewMessage(taskId, ArticlePhaseEnum.TITLE_REVIEWING, state.getTitleReviewResult());
 
             // 保存标题方案到数据库
             articleService.saveTitleOptions(taskId, state.getTitleOptions());
@@ -94,6 +100,8 @@ public class ArticleAsyncService {
             sendSseMessage(taskId, SseMessageTypeEnum.TITLES_GENERATED, data);
 
             log.info("阶段1异步任务完成, taskId={}", taskId);
+        } catch (ReviewRejectedException e) {
+            handleReviewRejected(taskId, e);
         } catch (Exception e) {
             log.error("阶段1异步任务失败, taskId={}", taskId, e);
 
@@ -130,7 +138,9 @@ public class ArticleAsyncService {
             articleService.updatePhase(taskId, ArticlePhaseEnum.OUTLINE_GENERATING);
             ArticleState state = new ArticleState();
             state.setTaskId(taskId);
+            state.setTopic(article.getTopic());
             state.setStyle(article.getStyle());
+            state.setWordRange(article.getWordRange());
             state.setUserDescription(article.getUserDescription());
 
             // 设置标题
@@ -149,6 +159,7 @@ public class ArticleAsyncService {
                     handleAgentMessage(taskId, message, state);
                 });
             }
+            sendReviewMessage(taskId, ArticlePhaseEnum.OUTLINE_REVIEWING, state.getOutlineReviewResult());
 
             // 保存大纲到数据库
             Article articleToUpdate = articleService.getByTaskId(taskId);
@@ -164,6 +175,8 @@ public class ArticleAsyncService {
             sendSseMessage(taskId, SseMessageTypeEnum.OUTLINE_GENERATED, data);
 
             log.info("阶段2异步任务完成, taskId={}", taskId);
+        } catch (ReviewRejectedException e) {
+            handleReviewRejected(taskId, e);
         } catch (Exception e) {
             log.error("阶段2异步任务失败, taskId={}", taskId, e);
 
@@ -200,7 +213,10 @@ public class ArticleAsyncService {
             articleService.updatePhase(taskId, ArticlePhaseEnum.CONTENT_GENERATING);
             ArticleState state = new ArticleState();
             state.setTaskId(taskId);
+            state.setTopic(article.getTopic());
             state.setStyle(article.getStyle());
+            state.setWordRange(article.getWordRange());
+            state.setUserDescription(article.getUserDescription());
 
             // 从数据库获取允许的配图方式
             List<String> enabledMethods = null;
@@ -238,6 +254,9 @@ public class ArticleAsyncService {
                     handleAgentMessage(taskId, message, state);
                 });
             }
+            sendReviewMessage(taskId, ArticlePhaseEnum.CONTENT_REVIEWING, state.getContentReviewResult());
+            sendReviewMessage(taskId, ArticlePhaseEnum.IMAGE_REVIEWING, state.getImagePlanReviewResult());
+            sendImageReviewMessages(taskId, state.getImageReviewResults());
 
             // 保存完整文章到数据库
             articleService.saveArticleContent(taskId, state);
@@ -253,6 +272,8 @@ public class ArticleAsyncService {
             sseEmitterManager.complete(taskId);
 
             log.info("阶段3异步任务完成, taskId={}", taskId);
+        } catch (ReviewRejectedException e) {
+            handleReviewRejected(taskId, e);
         } catch (Exception e) {
             log.error("阶段3异步任务失败, taskId={}", taskId, e);
 
@@ -338,20 +359,25 @@ public class ArticleAsyncService {
         if (SseMessageTypeEnum.AGENT1_COMPLETE.getValue().equals(message)) {
             data.put("type", SseMessageTypeEnum.AGENT1_COMPLETE.getValue());
             data.put("title", state.getTitle());
+            data.put("reviewResult", state.getTitleReviewResult());
         } else if (SseMessageTypeEnum.AGENT2_COMPLETE.getValue().equals(message)) {
             data.put("type", SseMessageTypeEnum.AGENT2_COMPLETE.getValue());
             data.put("outline", state.getOutline().getSections());
+            data.put("reviewResult", state.getOutlineReviewResult());
         } else if (SseMessageTypeEnum.AGENT3_COMPLETE.getValue().equals(message)) {
             articleService.updatePhase(state.getTaskId(), ArticlePhaseEnum.IMAGE_PLANNING);
             data.put("type", SseMessageTypeEnum.AGENT3_COMPLETE.getValue());
+            data.put("reviewResult", state.getContentReviewResult());
         } else if (SseMessageTypeEnum.AGENT4_COMPLETE.getValue().equals(message)) {
             articleService.updatePhase(state.getTaskId(), ArticlePhaseEnum.IMAGE_EXECUTING);
             data.put("type", SseMessageTypeEnum.AGENT4_COMPLETE.getValue());
             data.put("imageRequirements", state.getImageRequirements());
+            data.put("reviewResult", state.getImagePlanReviewResult());
         } else if (SseMessageTypeEnum.AGENT5_COMPLETE.getValue().equals(message)) {
             articleService.updatePhase(state.getTaskId(), ArticlePhaseEnum.MERGING);
             data.put("type", SseMessageTypeEnum.AGENT5_COMPLETE.getValue());
             data.put("images", state.getImages());
+            data.put("imageReviewResults", state.getImageReviewResults());
         } else if (SseMessageTypeEnum.MERGE_COMPLETE.getValue().equals(message)) {
             data.put("type", SseMessageTypeEnum.MERGE_COMPLETE.getValue());
             data.put("fullContent", state.getFullContent());
@@ -370,5 +396,35 @@ public class ArticleAsyncService {
         data.put("type", type.getValue());
         data.putAll(additionalData);
         sseEmitterManager.send(taskId, GsonUtils.toJson(data));
+    }
+
+    private void sendReviewMessage(String taskId, ArticlePhaseEnum phase, ReviewResult reviewResult) {
+        if (reviewResult == null) {
+            return;
+        }
+        Map<String, Object> data = new HashMap<>();
+        data.put("phase", phase.getValue());
+        data.put("reviewResult", reviewResult);
+        sendSseMessage(taskId, SseMessageTypeEnum.REVIEW_COMPLETE, data);
+    }
+
+    private void sendImageReviewMessages(String taskId, List<ImageReviewResult> imageReviewResults) {
+        if (imageReviewResults == null || imageReviewResults.isEmpty()) {
+            return;
+        }
+        for (ImageReviewResult reviewResult : imageReviewResults) {
+            sendReviewMessage(taskId, ArticlePhaseEnum.IMAGE_REVIEWING, reviewResult);
+        }
+    }
+
+    private void handleReviewRejected(String taskId, ReviewRejectedException e) {
+        log.warn("阶段评审未通过, taskId={}, phase={}, score={}", taskId, e.getPhase(),
+                e.getReviewResult() != null ? e.getReviewResult().getScore() : null);
+        ArticlePhaseEnum phase = ArticlePhaseEnum.getByValue(e.getPhase());
+        sendReviewMessage(taskId, phase != null ? phase : ArticlePhaseEnum.FAILED, e.getReviewResult());
+        articleService.updateArticleStatus(taskId, ArticleStatusEnum.FAILED, e.getMessage());
+        articleService.updatePhase(taskId, ArticlePhaseEnum.FAILED);
+        sendSseMessage(taskId, SseMessageTypeEnum.ERROR, Map.of("message", e.getMessage()));
+        sseEmitterManager.complete(taskId);
     }
 }

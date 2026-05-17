@@ -3,8 +3,10 @@ package com.sxxian.multiagentcreator.agent.parallel;
 import com.alibaba.cloud.ai.graph.OverAllState;
 import com.alibaba.cloud.ai.graph.action.NodeAction;
 import com.sxxian.multiagentcreator.agent.context.StreamHandlerContext;
+import com.sxxian.multiagentcreator.agent.ReviewAgent;
 import com.sxxian.multiagentcreator.agent.tools.ImageGenerationTool;
 import com.sxxian.multiagentcreator.model.dto.article.ArticleState;
+import com.sxxian.multiagentcreator.model.dto.review.ImageReviewResult;
 import com.sxxian.multiagentcreator.model.enums.SseMessageTypeEnum;
 import com.sxxian.multiagentcreator.utils.GsonUtils;
 import lombok.RequiredArgsConstructor;
@@ -31,9 +33,11 @@ import java.util.stream.Collectors;
 public class ParallelImageGenerator implements NodeAction {
 
     private final ImageGenerationTool imageGenerationTool;
+    private final ReviewAgent reviewAgent;
 
     public static final String INPUT_IMAGE_REQUIREMENTS = "imageRequirements";
     public static final String OUTPUT_IMAGES = "images";
+    public static final String OUTPUT_IMAGE_REVIEW_RESULTS = "imageReviewResults";
 
     @Override
     public Map<String, Object> apply(OverAllState state) throws Exception {
@@ -77,7 +81,9 @@ public class ParallelImageGenerator implements NodeAction {
                         )));
 
         // 并行执行不同类型的图片生成
-        List<ArticleState.ImageResult> allImages = executeParallel(groupedBySource, streamHandler);
+        ArticleState reviewState = buildReviewState(state);
+        List<ImageReviewResult> imageReviewResults = new CopyOnWriteArrayList<>();
+        List<ArticleState.ImageResult> allImages = executeParallel(groupedBySource, streamHandler, reviewState, imageReviewResults);
 
         // 按 position 排序
         allImages.sort((a, b) -> {
@@ -88,7 +94,10 @@ public class ParallelImageGenerator implements NodeAction {
 
         log.info("ParallelImageGenerator 执行完成: 成功生成 {} 张图片", allImages.size());
 
-        return Map.of(OUTPUT_IMAGES, allImages);
+        return Map.of(
+                OUTPUT_IMAGES, allImages,
+                OUTPUT_IMAGE_REVIEW_RESULTS, imageReviewResults
+        );
     }
 
     /**
@@ -97,7 +106,9 @@ public class ParallelImageGenerator implements NodeAction {
      */
     private List<ArticleState.ImageResult> executeParallel(
             Map<String, List<ArticleState.ImageRequirement>> groupedBySource,
-            Consumer<String> streamHandler) {
+            Consumer<String> streamHandler,
+            ArticleState reviewState,
+            List<ImageReviewResult> imageReviewResults) {
 
         // 使用线程安全的列表收集结果
         CopyOnWriteArrayList<ArticleState.ImageResult> allImages = new CopyOnWriteArrayList<>();
@@ -127,6 +138,7 @@ public class ParallelImageGenerator implements NodeAction {
                             if (result.isSuccess()) {
                                 ArticleState.ImageResult imageResult = convertToImageResult(result);
                                 allImages.add(imageResult);
+                                imageReviewResults.add(reviewAgent.reviewImageResult(reviewState, req, imageResult));
 
                                 // 推送单张配图完成消息
                                 if (streamHandler != null) {
@@ -155,6 +167,18 @@ public class ParallelImageGenerator implements NodeAction {
         CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
 
         return new ArrayList<>(allImages);
+    }
+
+    private ArticleState buildReviewState(OverAllState state) {
+        ArticleState reviewState = new ArticleState();
+        state.value("taskId").ifPresent(v -> reviewState.setTaskId(v.toString()));
+        state.value("topic").ifPresent(v -> reviewState.setTopic(v.toString()));
+        state.value("style").ifPresent(v -> reviewState.setStyle(v.toString()));
+        ArticleState.TitleResult title = new ArticleState.TitleResult();
+        state.value("mainTitle").ifPresent(v -> title.setMainTitle(v.toString()));
+        state.value("subTitle").ifPresent(v -> title.setSubTitle(v.toString()));
+        reviewState.setTitle(title);
+        return reviewState;
     }
 
     /**

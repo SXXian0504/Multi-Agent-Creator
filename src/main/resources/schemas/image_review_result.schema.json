@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ImageReviewResult",
+  "type": "object",
+  "required": ["approved", "score", "problems", "suggestions", "nextAction", "observation"],
+  "properties": {
+    "approved": {
+      "type": "boolean"
+    },
+    "score": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "problems": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "suggestions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "nextAction": {
+      "type": "string"
+    },
+    "observation": {
+      "type": "string"
+    },
+    "revisionAdvice": {
+      "type": "string"
+    }
+  }
+}

@@ -3,10 +3,14 @@ package com.sxxian.multiagentcreator.agent.agents;
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
 import com.alibaba.cloud.ai.graph.OverAllState;
 import com.alibaba.cloud.ai.graph.action.NodeAction;
+import com.sxxian.multiagentcreator.agent.ReviewAgent;
 import com.sxxian.multiagentcreator.constant.PromptConstant;
+import com.sxxian.multiagentcreator.exception.ReviewRejectedException;
 import com.sxxian.multiagentcreator.model.dto.article.ArticleState;
+import com.sxxian.multiagentcreator.model.dto.review.ReviewResult;
 import com.sxxian.multiagentcreator.model.enums.ImageMethodEnum;
-import com.sxxian.multiagentcreator.utils.GsonUtils;
+import com.sxxian.multiagentcreator.model.enums.StructuredOutputTypeEnum;
+import com.sxxian.multiagentcreator.service.JsonStructuredOutputService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.messages.UserMessage;
@@ -28,12 +32,15 @@ import java.util.Map;
 public class ImageAnalyzerAgent implements NodeAction {
 
     private final DashScopeChatModel chatModel;
+    private final JsonStructuredOutputService jsonStructuredOutputService;
+    private final ReviewAgent reviewAgent;
 
     public static final String INPUT_MAIN_TITLE = "mainTitle";
     public static final String INPUT_CONTENT = "content";
     public static final String INPUT_ENABLED_IMAGE_METHODS = "enabledImageMethods";
     public static final String OUTPUT_CONTENT_WITH_PLACEHOLDERS = "contentWithPlaceholders";
     public static final String OUTPUT_IMAGE_REQUIREMENTS = "imageRequirements";
+    public static final String OUTPUT_IMAGE_PLAN_REVIEW_RESULT = "imagePlanReviewResult";
 
     @Override
     public Map<String, Object> apply(OverAllState state) throws Exception {
@@ -69,21 +76,26 @@ public class ImageAnalyzerAgent implements NodeAction {
                 .replace("{availableMethods}", availableMethods)
                 .replace("{methodUsageGuide}", methodUsageGuide);
 
-        // 调用 LLM
-        ChatResponse response = chatModel.call(new Prompt(new UserMessage(prompt)));
-        String responseContent = response.getResult().getOutput().getText();
-
-        // 解析结果（新格式：包含 contentWithPlaceholders 和 imageRequirements）
-        ArticleState.Agent4Result agent4Result = GsonUtils.fromJson(
-                responseContent,
-                ArticleState.Agent4Result.class
-        );
+        ArticleState.Agent4Result agent4Result = generateImagePlan(prompt);
 
         // 验证并过滤配图需求
         List<ArticleState.ImageRequirement> validatedRequirements = validateAndFilterImageRequirements(
                 agent4Result.getImageRequirements(),
                 enabledMethods
         );
+        ArticleState reviewState = buildReviewState(state, mainTitle, agent4Result.getContentWithPlaceholders(),
+                validatedRequirements);
+        ReviewResult reviewResult = reviewAgent.reviewImagePlan(reviewState);
+        if (!reviewResult.isApprovedByThreshold()) {
+            String revisedPrompt = prompt + reviewAgent.buildRevisionAdvice(reviewResult);
+            agent4Result = generateImagePlan(revisedPrompt);
+            validatedRequirements = validateAndFilterImageRequirements(agent4Result.getImageRequirements(), enabledMethods);
+            reviewState = buildReviewState(state, mainTitle, agent4Result.getContentWithPlaceholders(), validatedRequirements);
+            reviewResult = reviewAgent.reviewImagePlan(reviewState);
+            if (!reviewResult.isApprovedByThreshold()) {
+                throw new ReviewRejectedException("IMAGE_REVIEWING", reviewResult);
+            }
+        }
 
         log.info("ImageAnalyzerAgent 执行完成: 配图需求数量={}, 验证后数量={}, 已在正文中插入占位符",
                 agent4Result.getImageRequirements().size(), validatedRequirements.size());
@@ -92,8 +104,36 @@ public class ImageAnalyzerAgent implements NodeAction {
         return Map.of(
                 OUTPUT_CONTENT_WITH_PLACEHOLDERS, agent4Result.getContentWithPlaceholders(),
                 INPUT_CONTENT, agent4Result.getContentWithPlaceholders(), // 更新 content 为包含占位符的版本，传给下游节点
-                OUTPUT_IMAGE_REQUIREMENTS, validatedRequirements
+                OUTPUT_IMAGE_REQUIREMENTS, validatedRequirements,
+                OUTPUT_IMAGE_PLAN_REVIEW_RESULT, reviewResult
         );
+    }
+
+    private ArticleState.Agent4Result generateImagePlan(String prompt) {
+        ChatResponse response = chatModel.call(new Prompt(new UserMessage(prompt)));
+        String responseContent = response.getResult().getOutput().getText();
+        return jsonStructuredOutputService.parse(
+                responseContent,
+                ArticleState.Agent4Result.class,
+                StructuredOutputTypeEnum.IMAGE_PLAN,
+                () -> chatModel.call(new Prompt(new UserMessage(prompt))).getResult().getOutput().getText(),
+                1
+        );
+    }
+
+    private ArticleState buildReviewState(OverAllState sourceState, String mainTitle, String content,
+                                          List<ArticleState.ImageRequirement> requirements) {
+        ArticleState reviewState = new ArticleState();
+        sourceState.value("taskId").ifPresent(v -> reviewState.setTaskId(v.toString()));
+        sourceState.value("topic").ifPresent(v -> reviewState.setTopic(v.toString()));
+        sourceState.value("style").ifPresent(v -> reviewState.setStyle(v.toString()));
+        ArticleState.TitleResult title = new ArticleState.TitleResult();
+        title.setMainTitle(mainTitle);
+        sourceState.value("subTitle").ifPresent(v -> title.setSubTitle(v.toString()));
+        reviewState.setTitle(title);
+        reviewState.setContent(content);
+        reviewState.setImageRequirements(requirements);
+        return reviewState;
     }
 
     /**
