@@ -45,6 +45,11 @@ public enum ImageMethodEnum {
     SVG_DIAGRAM("SVG_DIAGRAM", "SVG 概念示意图", true, false),
 
     /**
+     * 千问文生图（DashScope AI 生图）
+     */
+    QWEN_IMAGE("QWEN_IMAGE", "千问文生图", true, false),
+
+    /**
      * Picsum 随机图片（降级方案）
      */
     PICSUM("PICSUM", "Picsum 随机图片", false, true);

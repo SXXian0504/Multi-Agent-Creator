@@ -85,8 +85,8 @@ public class ArticleAsyncService {
             // 保存标题方案到数据库
             articleService.saveTitleOptions(taskId, state.getTitleOptions());
 
-            // 更新阶段为等待选择标题
-            articleService.updatePhase(taskId, ArticlePhaseEnum.TITLE_SELECTING);
+            // 更新阶段为等待用户确认标题
+            articleService.updatePhase(taskId, ArticlePhaseEnum.TITLE_WAITING_USER_CONFIRM);
 
             // 推送标题方案生成完成消息
             Map<String, Object> data = new HashMap<>();
@@ -99,6 +99,7 @@ public class ArticleAsyncService {
 
             // 更新状态为失败
             articleService.updateArticleStatus(taskId, ArticleStatusEnum.FAILED, e.getMessage());
+            articleService.updatePhase(taskId, ArticlePhaseEnum.FAILED);
 
             // 推送错误消息
             sendSseMessage(taskId, SseMessageTypeEnum.ERROR, Map.of("message", e.getMessage()));
@@ -126,6 +127,7 @@ public class ArticleAsyncService {
             }
 
             // 创建状态对象
+            articleService.updatePhase(taskId, ArticlePhaseEnum.OUTLINE_GENERATING);
             ArticleState state = new ArticleState();
             state.setTaskId(taskId);
             state.setStyle(article.getStyle());
@@ -153,8 +155,8 @@ public class ArticleAsyncService {
             articleToUpdate.setOutline(GsonUtils.toJson(state.getOutline().getSections()));
             articleService.updateById(articleToUpdate);
 
-            // 更新阶段为等待编辑大纲
-            articleService.updatePhase(taskId, ArticlePhaseEnum.OUTLINE_EDITING);
+            // 更新阶段为等待用户确认大纲
+            articleService.updatePhase(taskId, ArticlePhaseEnum.OUTLINE_WAITING_USER_CONFIRM);
 
             // 推送大纲生成完成消息
             Map<String, Object> data = new HashMap<>();
@@ -167,6 +169,7 @@ public class ArticleAsyncService {
 
             // 更新状态为失败
             articleService.updateArticleStatus(taskId, ArticleStatusEnum.FAILED, e.getMessage());
+            articleService.updatePhase(taskId, ArticlePhaseEnum.FAILED);
 
             // 推送错误消息
             sendSseMessage(taskId, SseMessageTypeEnum.ERROR, Map.of("message", e.getMessage()));
@@ -194,6 +197,7 @@ public class ArticleAsyncService {
             }
 
             // 创建状态对象
+            articleService.updatePhase(taskId, ArticlePhaseEnum.CONTENT_GENERATING);
             ArticleState state = new ArticleState();
             state.setTaskId(taskId);
             state.setStyle(article.getStyle());
@@ -240,6 +244,7 @@ public class ArticleAsyncService {
 
             // 更新状态为已完成
             articleService.updateArticleStatus(taskId, ArticleStatusEnum.COMPLETED, null);
+            articleService.updatePhase(taskId, ArticlePhaseEnum.COMPLETED);
 
             // 推送完成消息
             sendSseMessage(taskId, SseMessageTypeEnum.ALL_COMPLETE, Map.of("taskId", taskId));
@@ -253,6 +258,7 @@ public class ArticleAsyncService {
 
             // 更新状态为失败
             articleService.updateArticleStatus(taskId, ArticleStatusEnum.FAILED, e.getMessage());
+            articleService.updatePhase(taskId, ArticlePhaseEnum.FAILED);
 
             // 推送错误消息
             sendSseMessage(taskId, SseMessageTypeEnum.ERROR, Map.of("message", e.getMessage()));
@@ -336,11 +342,14 @@ public class ArticleAsyncService {
             data.put("type", SseMessageTypeEnum.AGENT2_COMPLETE.getValue());
             data.put("outline", state.getOutline().getSections());
         } else if (SseMessageTypeEnum.AGENT3_COMPLETE.getValue().equals(message)) {
+            articleService.updatePhase(state.getTaskId(), ArticlePhaseEnum.IMAGE_PLANNING);
             data.put("type", SseMessageTypeEnum.AGENT3_COMPLETE.getValue());
         } else if (SseMessageTypeEnum.AGENT4_COMPLETE.getValue().equals(message)) {
+            articleService.updatePhase(state.getTaskId(), ArticlePhaseEnum.IMAGE_EXECUTING);
             data.put("type", SseMessageTypeEnum.AGENT4_COMPLETE.getValue());
             data.put("imageRequirements", state.getImageRequirements());
         } else if (SseMessageTypeEnum.AGENT5_COMPLETE.getValue().equals(message)) {
+            articleService.updatePhase(state.getTaskId(), ArticlePhaseEnum.MERGING);
             data.put("type", SseMessageTypeEnum.AGENT5_COMPLETE.getValue());
             data.put("images", state.getImages());
         } else if (SseMessageTypeEnum.MERGE_COMPLETE.getValue().equals(message)) {

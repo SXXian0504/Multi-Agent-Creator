@@ -33,6 +33,11 @@ public class AgentExecutionStats implements Serializable {
     private Integer totalDurationMs;
 
     /**
+     * 链路ID，阶段 1 默认与 taskId 一致
+     */
+    private String traceId;
+
+    /**
      * 智能体数量
      */
     private Integer agentCount;
@@ -41,6 +46,11 @@ public class AgentExecutionStats implements Serializable {
      * 各智能体耗时（key: agentName, value: durationMs）
      */
     private Map<String, Integer> agentDurations;
+
+    /**
+     * 各阶段耗时（key: phase, value: durationMs）
+     */
+    private Map<String, Integer> phaseDurations;
 
     /**
      * 总体状态：SUCCESS（全部成功）、FAILED（存在失败）、RUNNING（执行中）

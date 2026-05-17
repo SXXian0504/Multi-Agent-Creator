@@ -35,6 +35,16 @@ public class AgentLog implements Serializable {
     private String taskId;
 
     /**
+     * 链路ID，默认与 taskId 一致，后续可扩展为独立 trace
+     */
+    private String traceId;
+
+    /**
+     * 执行阶段
+     */
+    private String phase;
+
+    /**
      * 智能体名称
      */
     private String agentName;
@@ -65,6 +75,11 @@ public class AgentLog implements Serializable {
     private String errorMessage;
 
     /**
+     * 当前阶段重试次数
+     */
+    private Integer retryCount;
+
+    /**
      * 使用的Prompt
      */
     private String prompt;
@@ -78,6 +93,11 @@ public class AgentLog implements Serializable {
      * 输出数据（JSON格式）
      */
     private String outputData;
+
+    /**
+     * 扩展元数据（JSON格式）
+     */
+    private String metadata;
 
     /**
      * 创建时间

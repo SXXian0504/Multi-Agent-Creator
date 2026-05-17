@@ -235,9 +235,10 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
         // 校验权限
         checkArticlePermission(article, loginUser);
 
-        // 校验当前阶段（必须是 TITLE_SELECTING）
+        // 兼容阶段 1 新状态和旧版前端状态。
         ArticlePhaseEnum currentPhase = ArticlePhaseEnum.getByValue(article.getPhase());
-        ThrowUtils.throwIf(currentPhase != ArticlePhaseEnum.TITLE_SELECTING,
+        ThrowUtils.throwIf(currentPhase != ArticlePhaseEnum.TITLE_WAITING_USER_CONFIRM
+                        && currentPhase != ArticlePhaseEnum.TITLE_SELECTING,
                 ErrorCode.OPERATION_ERROR, "当前阶段不允许此操作");
 
         // 保存用户选择的标题和补充描述
@@ -258,9 +259,10 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
         // 校验权限
         checkArticlePermission(article, loginUser);
 
-        // 校验当前阶段（必须是 OUTLINE_EDITING）
+        // 兼容阶段 1 新状态和旧版前端状态。
         ArticlePhaseEnum currentPhase = ArticlePhaseEnum.getByValue(article.getPhase());
-        ThrowUtils.throwIf(currentPhase != ArticlePhaseEnum.OUTLINE_EDITING,
+        ThrowUtils.throwIf(currentPhase != ArticlePhaseEnum.OUTLINE_WAITING_USER_CONFIRM
+                        && currentPhase != ArticlePhaseEnum.OUTLINE_EDITING,
                 ErrorCode.OPERATION_ERROR, "当前阶段不允许此操作");
 
         // 保存用户编辑后的大纲
@@ -309,9 +311,10 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
         ThrowUtils.throwIf(!isVipOrAdmin(loginUser), ErrorCode.NO_AUTH_ERROR,
                 "AI 修改大纲功能仅限 VIP 会员使用");
 
-        // 校验当前阶段（必须是 OUTLINE_EDITING）
+        // 兼容阶段 1 新状态和旧版前端状态。
         ArticlePhaseEnum currentPhase = ArticlePhaseEnum.getByValue(article.getPhase());
-        ThrowUtils.throwIf(currentPhase != ArticlePhaseEnum.OUTLINE_EDITING,
+        ThrowUtils.throwIf(currentPhase != ArticlePhaseEnum.OUTLINE_WAITING_USER_CONFIRM
+                        && currentPhase != ArticlePhaseEnum.OUTLINE_EDITING,
                 ErrorCode.OPERATION_ERROR, "当前阶段不允许此操作");
 
         // 获取当前大纲

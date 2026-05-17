@@ -22,4 +22,15 @@ public @interface AgentExecution {
      * 智能体描述
      */
     String description() default "";
+
+    /**
+     * 执行阶段
+     * 例如：TITLE_GENERATING、OUTLINE_GENERATING、CONTENT_GENERATING、IMAGE_PLANNING
+     */
+    String phase() default "";
+
+    /**
+     * 当前重试次数，阶段 1 先保留字段，后续重试闭环接入时使用
+     */
+    int retryCount() default 0;
 }

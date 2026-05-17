@@ -118,34 +118,100 @@ public class MermaidService implements ImageSearchService {
     /**
      * 调用 Mermaid CLI 转换为图片
      */
+//    private void convertMermaidToImage(File inputFile, File outputFile) {
+//        try {
+//            // 根据操作系统选择命令
+//            String command = SystemUtil.getOsInfo().isWindows() ? "mmdc.cmd" : mermaidConfig.getCliCommand();
+//
+//            // 构建命令行参数
+//            String cmdLine = String.format("%s -i %s -o %s -b %s",
+//                    command,
+//                    inputFile.getAbsolutePath(),
+//                    outputFile.getAbsolutePath(),
+//                    mermaidConfig.getBackgroundColor()
+//            );
+//
+//            // 如果配置了宽度，添加宽度参数
+//            if (mermaidConfig.getWidth() != null && mermaidConfig.getWidth() > 0) {
+//                cmdLine += " -w " + mermaidConfig.getWidth();
+//            }
+//
+//            log.info("执行 Mermaid CLI 命令: {}", cmdLine);
+//
+//            // 执行命令（带超时）
+//            String result = RuntimeUtil.execForStr(cmdLine);
+//
+//            log.debug("Mermaid CLI 执行结果: {}", result);
+//
+//        } catch (Exception e) {
+//            log.error("执行 Mermaid CLI 失败", e);
+//            throw new RuntimeException("Mermaid CLI 执行失败: " + e.getMessage(), e);
+//        }
+//    }
+
     private void convertMermaidToImage(File inputFile, File outputFile) {
         try {
-            // 根据操作系统选择命令
-            String command = SystemUtil.getOsInfo().isWindows() ? "mmdc.cmd" : mermaidConfig.getCliCommand();
 
-            // 构建命令行参数
-            String cmdLine = String.format("%s -i %s -o %s -b %s",
+            String command = SystemUtil.getOsInfo().isWindows()
+                    ? "mmdc.cmd"
+                    : mermaidConfig.getCliCommand();
+
+            ProcessBuilder builder = new ProcessBuilder(
                     command,
-                    inputFile.getAbsolutePath(),
-                    outputFile.getAbsolutePath(),
-                    mermaidConfig.getBackgroundColor()
+                    "-i", inputFile.getAbsolutePath(),
+                    "-o", outputFile.getAbsolutePath(),
+                    "-b", mermaidConfig.getBackgroundColor()
             );
 
-            // 如果配置了宽度，添加宽度参数
-            if (mermaidConfig.getWidth() != null && mermaidConfig.getWidth() > 0) {
-                cmdLine += " -w " + mermaidConfig.getWidth();
+            // 宽度
+            if (mermaidConfig.getWidth() != null
+                    && mermaidConfig.getWidth() > 0) {
+
+                builder.command().add("-w");
+                builder.command().add(String.valueOf(mermaidConfig.getWidth()));
             }
 
-            log.info("执行 Mermaid CLI 命令: {}", cmdLine);
+            // 关键：指定 Chrome
+            builder.environment().put(
+                    "PUPPETEER_EXECUTABLE_PATH",
+                    "D:\\Program\\Google\\Chrome\\Application\\chrome.exe"
+            );
 
-            // 执行命令（带超时）
-            String result = RuntimeUtil.execForStr(cmdLine);
-            
-            log.debug("Mermaid CLI 执行结果: {}", result);
+            // 可选
+            builder.environment().put(
+                    "PUPPETEER_SKIP_DOWNLOAD",
+                    "true"
+            );
+
+            // 合并 stderr/stdout
+            builder.redirectErrorStream(true);
+
+            log.info("执行 Mermaid CLI 命令: {}", builder.command());
+
+            Process process = builder.start();
+
+            // 读取日志
+            String logs = new String(
+                    process.getInputStream().readAllBytes()
+            );
+
+            int exitCode = process.waitFor();
+
+            log.info("Mermaid CLI exitCode={}", exitCode);
+            log.info("Mermaid CLI logs:\n{}", logs);
+
+            if (exitCode != 0) {
+                throw new RuntimeException(
+                        "Mermaid CLI 执行失败:\n" + logs
+                );
+            }
 
         } catch (Exception e) {
             log.error("执行 Mermaid CLI 失败", e);
-            throw new RuntimeException("Mermaid CLI 执行失败: " + e.getMessage(), e);
+            throw new RuntimeException(
+                    "Mermaid CLI 执行失败: " + e.getMessage(),
+                    e
+            );
         }
     }
 

@@ -3,6 +3,7 @@ package com.sxxian.multiagentcreator.agent;
 import com.alibaba.cloud.ai.graph.*;
 import com.alibaba.cloud.ai.graph.exception.GraphStateException;
 import com.alibaba.cloud.ai.graph.state.strategy.ReplaceStrategy;
+import com.sxxian.multiagentcreator.annotation.AgentExecution;
 import com.sxxian.multiagentcreator.agent.agents.*;
 import com.sxxian.multiagentcreator.agent.config.AgentConfig;
 import com.sxxian.multiagentcreator.agent.context.StreamHandlerContext;
@@ -37,13 +38,7 @@ public class ArticleAgentOrchestrator {
     private AgentConfig agentConfig;
 
     @Resource
-    private TitleGeneratorAgent titleGeneratorAgent;
-
-    @Resource
-    private OutlineGeneratorAgent outlineGeneratorAgent;
-
-    @Resource
-    private ContentGeneratorAgent contentGeneratorAgent;
+    private ArticleAgent articleAgent;
 
     @Resource
     private ImageAnalyzerAgent imageAnalyzerAgent;
@@ -79,6 +74,7 @@ public class ArticleAgentOrchestrator {
      * @param state         文章状态
      * @param streamHandler 流式输出处理器
      */
+    @AgentExecution(value = "orchestrator_phase1_generate_titles", description = "编排模式生成标题方案", phase = "TITLE_GENERATING")
     public void executePhase1_GenerateTitles(ArticleState state, Consumer<String> streamHandler) {
         log.info("阶段1（多智能体编排）：开始生成标题方案, taskId={}", state.getTaskId());
 
@@ -126,6 +122,7 @@ public class ArticleAgentOrchestrator {
      * @param state         文章状态
      * @param streamHandler 流式输出处理器
      */
+    @AgentExecution(value = "orchestrator_phase2_generate_outline", description = "编排模式生成文章大纲", phase = "OUTLINE_GENERATING")
     public void executePhase2_GenerateOutline(ArticleState state, Consumer<String> streamHandler) {
         log.info("阶段2（多智能体编排）：开始生成大纲, taskId={}", state.getTaskId());
 
@@ -185,6 +182,7 @@ public class ArticleAgentOrchestrator {
      * @param state         文章状态
      * @param streamHandler 流式输出处理器
      */
+    @AgentExecution(value = "orchestrator_phase3_generate_content", description = "编排模式生成正文和配图", phase = "CONTENT_GENERATING")
     public void executePhase3_GenerateContent(ArticleState state, Consumer<String> streamHandler) {
         log.info("阶段3（多智能体编排）：开始生成正文+配图, taskId={}", state.getTaskId());
 
@@ -286,9 +284,9 @@ public class ArticleAgentOrchestrator {
         KeyStrategyFactory keyStrategyFactory = createKeyStrategyFactory();
 
         return new StateGraph(keyStrategyFactory)
-                .addNode("title_generator", node_async(titleGeneratorAgent))
-                .addEdge(START, "title_generator")
-                .addEdge("title_generator", END);
+                .addNode("article_generate_titles", node_async(articleAgent::generateTitlesNode))
+                .addEdge(START, "article_generate_titles")
+                .addEdge("article_generate_titles", END);
     }
 
     /**
@@ -298,9 +296,9 @@ public class ArticleAgentOrchestrator {
         KeyStrategyFactory keyStrategyFactory = createKeyStrategyFactory();
 
         return new StateGraph(keyStrategyFactory)
-                .addNode("outline_generator", node_async(outlineGeneratorAgent))
-                .addEdge(START, "outline_generator")
-                .addEdge("outline_generator", END);
+                .addNode("article_generate_outline", node_async(articleAgent::generateOutlineNode))
+                .addEdge(START, "article_generate_outline")
+                .addEdge("article_generate_outline", END);
     }
 
     /**
@@ -312,13 +310,13 @@ public class ArticleAgentOrchestrator {
 
         return new StateGraph(keyStrategyFactory)
                 // 节点定义
-                .addNode("content_generator", node_async(contentGeneratorAgent))
+                .addNode("article_generate_content", node_async(articleAgent::generateContentNode))
                 .addNode("image_analyzer", node_async(imageAnalyzerAgent))
                 .addNode("parallel_image_generator", node_async(parallelImageGenerator))
                 .addNode("content_merger", node_async(contentMergerAgent))
                 // 边定义：顺序执行
-                .addEdge(START, "content_generator")
-                .addEdge("content_generator", "image_analyzer")
+                .addEdge(START, "article_generate_content")
+                .addEdge("article_generate_content", "image_analyzer")
                 .addEdge("image_analyzer", "parallel_image_generator")
                 .addEdge("parallel_image_generator", "content_merger")
                 .addEdge("content_merger", END);

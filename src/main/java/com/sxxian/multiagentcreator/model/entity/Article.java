@@ -105,7 +105,7 @@ public class Article implements Serializable {
     private String status;
 
     /**
-     * 当前阶段：PENDING/TITLE_GENERATING/TITLE_SELECTING/OUTLINE_GENERATING/OUTLINE_EDITING/CONTENT_GENERATING
+     * 当前阶段：见 ArticlePhaseEnum
      */
     private String phase;
 

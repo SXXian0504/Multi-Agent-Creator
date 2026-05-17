@@ -1,5 +1,7 @@
 package com.sxxian.multiagentcreator.aop;
 
+import com.alibaba.cloud.ai.graph.OverAllState;
+import com.sxxian.multiagentcreator.model.dto.article.ArticleContext;
 import com.sxxian.multiagentcreator.annotation.AgentExecution;
 import com.sxxian.multiagentcreator.model.dto.article.ArticleState;
 import com.sxxian.multiagentcreator.model.entity.AgentLog;
@@ -40,15 +42,22 @@ public class AgentExecutionAspect {
         String taskId = extractTaskId(pjp);
         String inputData = extractInputData(pjp);
         String prompt = extractPrompt(pjp);
+        String phase = extractPhase(pjp, agentExecution);
+        String traceId = "unknown".equals(taskId) ? null : taskId;
+        String metadata = buildMetadata(agentExecution, pjp);
 
         // 创建日志对象
         AgentLog agentLog = AgentLog.builder()
                 .taskId(taskId)
+                .traceId(traceId)
+                .phase(phase)
                 .agentName(agentExecution.value())
                 .startTime(startDateTime)
                 .status("RUNNING")
+                .retryCount(agentExecution.retryCount())
                 .prompt(prompt)
                 .inputData(inputData)
+                .metadata(metadata)
                 .build();
 
         Object result = null;
@@ -98,6 +107,12 @@ public class AgentExecutionAspect {
             if (arg instanceof ArticleState) {
                 return ((ArticleState) arg).getTaskId();
             }
+            if (arg instanceof ArticleContext) {
+                return ((ArticleContext) arg).getTaskId();
+            }
+            if (arg instanceof OverAllState state) {
+                return state.value("taskId").map(Object::toString).orElse("unknown");
+            }
         }
 
         // 尝试从第一个 String 参数获取（可能是 taskId）
@@ -108,6 +123,30 @@ public class AgentExecutionAspect {
         }
 
         return "unknown";
+    }
+
+    /**
+     * 提取执行阶段，优先使用注解显式声明，避免从业务状态中猜测。
+     */
+    private String extractPhase(ProceedingJoinPoint pjp, AgentExecution agentExecution) {
+        if (agentExecution.phase() != null && !agentExecution.phase().isBlank()) {
+            return agentExecution.phase();
+        }
+
+        Object[] args = pjp.getArgs();
+        if (args == null) {
+            return null;
+        }
+
+        for (Object arg : args) {
+            if (arg instanceof ArticleState state && state.getPhase() != null && !state.getPhase().isBlank()) {
+                return state.getPhase();
+            }
+            if (arg instanceof ArticleContext context && context.getPhase() != null && !context.getPhase().isBlank()) {
+                return context.getPhase();
+            }
+        }
+        return null;
     }
 
     /**
@@ -135,6 +174,16 @@ public class AgentExecutionAspect {
                     if (state.getTitle() != null) {
                         inputMap.put("mainTitle", state.getTitle().getMainTitle());
                     }
+                } else if (arg instanceof ArticleContext) {
+                    ArticleContext context = (ArticleContext) arg;
+                    inputMap.put("taskId", context.getTaskId());
+                    inputMap.put("phase", context.getPhase());
+                    if (context.getTitle() != null) {
+                        inputMap.put("mainTitle", context.getTitle().getMainTitle());
+                    }
+                } else if (arg instanceof OverAllState) {
+                    OverAllState state = (OverAllState) arg;
+                    state.value("taskId").ifPresent(value -> inputMap.put("taskId", value));
                 }
             }
 
@@ -182,6 +231,27 @@ public class AgentExecutionAspect {
             Method method = signature.getMethod();
             return method.getDeclaringClass().getSimpleName() + "." + method.getName();
         } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * 阶段 1 先以 metadata 承载扩展字段，后续 Review/JSON/工具指标可以继续追加。
+     */
+    private String buildMetadata(AgentExecution agentExecution, ProceedingJoinPoint pjp) {
+        try {
+            MethodSignature signature = (MethodSignature) pjp.getSignature();
+            Method method = signature.getMethod();
+
+            Map<String, Object> metadata = new HashMap<>();
+            metadata.put("description", agentExecution.description());
+            metadata.put("className", method.getDeclaringClass().getSimpleName());
+            metadata.put("methodName", method.getName());
+            metadata.put("retryCount", agentExecution.retryCount());
+            metadata.put("logVersion", "stage1");
+            return GsonUtils.toJson(metadata);
+        } catch (Exception e) {
+            log.warn("构建日志 metadata 失败", e);
             return null;
         }
     }

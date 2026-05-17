@@ -3,8 +3,10 @@ package com.sxxian.multiagentcreator.service;
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
 import com.google.gson.JsonSyntaxException;
 import com.google.gson.reflect.TypeToken;
+import com.sxxian.multiagentcreator.agent.ArticleAgent;
 import com.sxxian.multiagentcreator.annotation.AgentExecution;
 import com.sxxian.multiagentcreator.constant.PromptConstant;
+import com.sxxian.multiagentcreator.model.dto.article.ArticleContext;
 import com.sxxian.multiagentcreator.model.dto.article.ArticleState;
 import com.sxxian.multiagentcreator.model.dto.image.ImageRequest;
 import com.sxxian.multiagentcreator.model.enums.ArticleStyleEnum;
@@ -36,6 +38,9 @@ public class ArticleAgentService {
     @Resource
     private ImageServiceStrategy imageServiceStrategy;
 
+    @Resource
+    private ArticleAgent articleAgent;
+
     /**
      * 阶段1：生成标题方案（3-5个）
      *
@@ -46,8 +51,8 @@ public class ArticleAgentService {
         try {
             // 智能体1：生成标题方案
             log.info("阶段1：开始生成标题方案, taskId={}", state.getTaskId());
-            // 通过代理调用，使 AOP 生效
-            getProxy().agent1GenerateTitleOptions(state);
+            ArticleContext context = ArticleContext.fromState(state);
+            articleAgent.generateTitles(context).applyToState(state);
             streamHandler.accept(SseMessageTypeEnum.AGENT1_COMPLETE.getValue());
             log.info("阶段1：标题方案生成完成, taskId={}, optionsCount={}",
                     state.getTaskId(), state.getTitleOptions().size());
@@ -67,8 +72,8 @@ public class ArticleAgentService {
         try {
             // 智能体2：生成大纲（流式输出）
             log.info("阶段2：开始生成大纲, taskId={}", state.getTaskId());
-            // 通过代理调用，使 AOP 生效
-            getProxy().agent2GenerateOutline(state, streamHandler);
+            ArticleContext context = ArticleContext.fromState(state);
+            articleAgent.generateOutline(context, streamHandler).applyToState(state);
             streamHandler.accept(SseMessageTypeEnum.AGENT2_COMPLETE.getValue());
             log.info("阶段2：大纲生成完成, taskId={}", state.getTaskId());
         } catch (Exception e) {
@@ -90,7 +95,8 @@ public class ArticleAgentService {
 
             // 智能体3：生成正文（流式输出）
             log.info("阶段3：开始生成正文, taskId={}", state.getTaskId());
-            proxy.agent3GenerateContent(state, streamHandler);
+            ArticleContext context = ArticleContext.fromState(state);
+            articleAgent.generateContent(context, streamHandler).applyToState(state);
             streamHandler.accept(SseMessageTypeEnum.AGENT3_COMPLETE.getValue());
 
             // 智能体4：分析配图需求
@@ -118,7 +124,7 @@ public class ArticleAgentService {
     /**
      * 智能体1：生成标题方案（3-5个）
      */
-    @AgentExecution(value = "agent1_generate_titles", description = "生成标题方案")
+    @AgentExecution(value = "agent1_generate_titles", description = "生成标题方案", phase = "TITLE_GENERATING")
     public void agent1GenerateTitleOptions(ArticleState state) {
         String prompt = PromptConstant.AGENT1_TITLE_PROMPT
                 .replace("{topic}", state.getTopic())
@@ -137,7 +143,7 @@ public class ArticleAgentService {
     /**
      * 智能体2：生成大纲（流式输出）
      */
-    @AgentExecution(value = "agent2_generate_outline", description = "生成文章大纲")
+    @AgentExecution(value = "agent2_generate_outline", description = "生成文章大纲", phase = "OUTLINE_GENERATING")
     public void agent2GenerateOutline(ArticleState state, Consumer<String> streamHandler) {
         // 构建 prompt，根据是否有用户补充描述插入对应部分
         String descriptionSection = "";
@@ -161,7 +167,7 @@ public class ArticleAgentService {
     /**
      * 智能体3：生成正文（流式输出）
      */
-    @AgentExecution(value = "agent3_generate_content", description = "生成文章正文")
+    @AgentExecution(value = "agent3_generate_content", description = "生成文章正文", phase = "CONTENT_GENERATING")
     public void agent3GenerateContent(ArticleState state, Consumer<String> streamHandler) {
         String outlineText = GsonUtils.toJson(state.getOutline().getSections());
         String prompt = PromptConstant.AGENT3_CONTENT_PROMPT
@@ -178,7 +184,7 @@ public class ArticleAgentService {
     /**
      * 智能体4：分析配图需求（在正文中插入占位符）
      */
-    @AgentExecution(value = "agent4_analyze_image_requirements", description = "分析配图需求")
+    @AgentExecution(value = "agent4_analyze_image_requirements", description = "分析配图需求", phase = "IMAGE_PLANNING")
     public void agent4AnalyzeImageRequirements(ArticleState state) {
         // 构建可用配图方式说明
         String availableMethods = buildAvailableMethodsDescription(state.getEnabledImageMethods());
@@ -215,7 +221,7 @@ public class ArticleAgentService {
     /**
      * 智能体5：生成配图（串行执行，支持混用多种配图方式，统一上传到 COS）
      */
-    @AgentExecution(value = "agent5_generate_images", description = "生成配图")
+    @AgentExecution(value = "agent5_generate_images", description = "生成配图", phase = "IMAGE_EXECUTING")
     public void agent5GenerateImages(ArticleState state, Consumer<String> streamHandler) {
         List<ArticleState.ImageResult> imageResults = new ArrayList<>();
 
@@ -257,7 +263,7 @@ public class ArticleAgentService {
     /**
      * 图文合成：根据占位符将配图插入正文
      */
-    @AgentExecution(value = "agent6_merge_content", description = "图文合成")
+    @AgentExecution(value = "agent6_merge_content", description = "图文合成", phase = "MERGING")
     public void mergeImagesIntoContent(ArticleState state) {
         String content = state.getContent();
         List<ArticleState.ImageResult> images = state.getImages();
@@ -526,7 +532,7 @@ public class ArticleAgentService {
      * @param modifySuggestion 用户修改建议
      * @return 修改后的大纲
      */
-    @AgentExecution(value = "ai_modify_outline", description = "AI修改大纲")
+    @AgentExecution(value = "ai_modify_outline", description = "AI修改大纲", phase = "OUTLINE_GENERATING")
     public List<ArticleState.OutlineSection> aiModifyOutline(String mainTitle, String subTitle,
                                                              List<ArticleState.OutlineSection> currentOutline,
                                                              String modifySuggestion) {

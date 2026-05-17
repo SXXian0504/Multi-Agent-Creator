@@ -153,6 +153,7 @@ public class ImageServiceStrategy {
             case ICONIFY -> "iconify";
             case EMOJI_PACK -> "emoji-pack";
             case SVG_DIAGRAM -> "svg-diagram";
+            case QWEN_IMAGE -> "qwen-image";
             case PICSUM -> "picsum";
         };
     }

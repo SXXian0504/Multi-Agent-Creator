@@ -59,13 +59,22 @@ public class AgentLogServiceImpl extends ServiceImpl<AgentLogMapper, AgentLog> i
         // 计算统计数据
         int totalDuration = 0;
         Map<String, Integer> agentDurations = new HashMap<>();
+        Map<String, Integer> phaseDurations = new HashMap<>();
         String overallStatus = "SUCCESS";
+        String traceId = taskId;
 
         for (AgentLog log : logs) {
+            if (log.getTraceId() != null && !log.getTraceId().isEmpty()) {
+                traceId = log.getTraceId();
+            }
+
             // 累加总耗时
             if (log.getDurationMs() != null) {
                 totalDuration += log.getDurationMs();
                 agentDurations.put(log.getAgentName(), log.getDurationMs());
+                if (log.getPhase() != null && !log.getPhase().isEmpty()) {
+                    phaseDurations.merge(log.getPhase(), log.getDurationMs(), Integer::sum);
+                }
             }
 
             // 判断总体状态
@@ -78,9 +87,11 @@ public class AgentLogServiceImpl extends ServiceImpl<AgentLogMapper, AgentLog> i
 
         return AgentExecutionStats.builder()
                 .taskId(taskId)
+                .traceId(traceId)
                 .totalDurationMs(totalDuration)
                 .agentCount(logs.size())
                 .agentDurations(agentDurations)
+                .phaseDurations(phaseDurations)
                 .overallStatus(overallStatus)
                 .logs(logs)
                 .build();
