@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OutlineImagePlan",
+  "type": "object",
+  "required": ["imageRequirements"],
+  "properties": {
+    "imageRequirements": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["position", "type", "imageSource", "reason", "keywords", "prompt", "placeholderId"],
+        "properties": {
+          "position": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "type": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sectionTitle": {
+            "type": "string"
+          },
+          "imageSource": {
+            "type": "string",
+            "enum": ["PEXELS", "NANO_BANANA", "MERMAID", "GRAPHVIZ", "ICONIFY", "EMOJI_PACK", "SVG_DIAGRAM", "QWEN_IMAGE", "PICSUM"]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "keywords": {
+            "type": "string"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "placeholderId": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
