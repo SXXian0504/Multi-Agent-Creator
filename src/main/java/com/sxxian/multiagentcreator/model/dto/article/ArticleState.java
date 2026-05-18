@@ -22,6 +22,11 @@ public class ArticleState implements Serializable {
     private String topic;
 
     /**
+     * 发布平台
+     */
+    private String platform;
+
+    /**
      * 用户补充描述
      */
     private String userDescription;
@@ -102,6 +107,11 @@ public class ArticleState implements Serializable {
     private List<ImageReviewResult> imageReviewResults;
 
     /**
+     * 图片执行、评审、重规划和降级轨迹。
+     */
+    private List<ImageExecutionTrace> imageExecutionTraces;
+
+    /**
      * 允许的配图方式列表（为空表示支持所有方式）
      */
     private List<String> enabledImageMethods;
@@ -152,17 +162,54 @@ public class ArticleState implements Serializable {
         private String sectionTitle;
         private String keywords;
         /**
-         * 图片来源：PEXELS（图库检索）或 NANO_BANANA（AI 生图）
+         * 图片来源：PEXELS（图库检索）、QWEN_IMAGE（百炼文生图）或 NANO_BANANA（旧 AI 生图）
          */
         private String imageSource;
         /**
-         * AI 生图提示词（当 imageSource 为 NANO_BANANA 时使用）
+         * 选择该图片位置、工具和参数的原因。
+         */
+        private String reason;
+        /**
+         * 当前图片需求已经重规划的次数。
+         */
+        private Integer retryCount;
+        /**
+         * AI 生图提示词（当 imageSource 为 QWEN_IMAGE/NANO_BANANA 时使用）
          */
         private String prompt;
         /**
          * 占位符ID，用于在正文中定位插入位置，格式：{{IMAGE_PLACEHOLDER_N}}
          */
         private String placeholderId;
+    }
+
+    /**
+     * 单张图片每轮执行轨迹。
+     */
+    @Data
+    public static class ImageExecutionTrace implements Serializable {
+        private Integer position;
+        private String placeholderId;
+        private Integer attempt;
+        private String imageSource;
+        private String keywords;
+        private String prompt;
+        private String reason;
+        private Boolean toolSuccess;
+        private String toolError;
+        private String url;
+        private String method;
+        private Integer reviewScore;
+        private Boolean reviewApproved;
+        private String nextAction;
+        private String observation;
+        private String revisionAdvice;
+        private Boolean fallbackUsed;
+        private String finalStatus;
+        private String plannedFrom;
+        private Long planStartedAt;
+        private Long planEndedAt;
+        private String mergeAction;
     }
 
     /**

@@ -28,12 +28,34 @@ spring:
 pexels:
   api-key: ${PEXELS_API_KEY:xxx}
 
+# 百炼文生图配置（默认万相 wanx-v1）
+qwen:
+  image:
+    api-key: ${DASHSCOPE_API_KEY:xxx}
+    model: wanx-v1
+    submit-endpoint: https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis
+    task-endpoint: https://dashscope.aliyuncs.com/api/v1/tasks
+    width: 1024
+    height: 1024
+    n: 1
+    style: "<auto>"
+    poll-interval: 5000
+    max-poll-attempts: 24
+
 # Nano Banana API 配置（可选）
 nano:
   banana:
     api-key: ${NANO_BANANA_API_KEY:xxx}
 
 ## Stripe 支付配置（可选）
+# Graphviz DOT 图表生成配置
+graphviz:
+  cli-command: ${GRAPHVIZ_CLI_COMMAND:dot}
+  output-format: svg
+  background-color: transparent
+  timeout: 30000
+
+# Stripe
 #stripe:
 #  api-key: ${STRIPE_API_KEY:}
 #  webhook-secret: ${STRIPE_WEBHOOK_SECRET:}

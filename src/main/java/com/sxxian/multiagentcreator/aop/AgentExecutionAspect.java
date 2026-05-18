@@ -5,6 +5,7 @@ import com.sxxian.multiagentcreator.context.StructuredOutputTraceContext;
 import com.sxxian.multiagentcreator.model.dto.article.ArticleContext;
 import com.sxxian.multiagentcreator.annotation.AgentExecution;
 import com.sxxian.multiagentcreator.model.dto.article.ArticleState;
+import com.sxxian.multiagentcreator.model.dto.image.ImageObservation;
 import com.sxxian.multiagentcreator.model.entity.AgentLog;
 import com.sxxian.multiagentcreator.model.dto.review.ReviewResult;
 import com.sxxian.multiagentcreator.service.AgentLogService;
@@ -113,6 +114,9 @@ public class AgentExecutionAspect {
             if (arg instanceof ArticleContext) {
                 return ((ArticleContext) arg).getTaskId();
             }
+            if (arg instanceof ImageObservation) {
+                return ((ImageObservation) arg).getTaskId();
+            }
             if (arg instanceof OverAllState state) {
                 return state.value("taskId").map(Object::toString).orElse("unknown");
             }
@@ -184,6 +188,12 @@ public class AgentExecutionAspect {
                     if (context.getTitle() != null) {
                         inputMap.put("mainTitle", context.getTitle().getMainTitle());
                     }
+                } else if (arg instanceof ImageObservation observation) {
+                    inputMap.put("taskId", observation.getTaskId());
+                    inputMap.put("position", observation.getRequirement() != null
+                            ? observation.getRequirement().getPosition()
+                            : null);
+                    inputMap.put("attempt", observation.getAttempt());
                 } else if (arg instanceof OverAllState) {
                     OverAllState state = (OverAllState) arg;
                     state.value("taskId").ifPresent(value -> inputMap.put("taskId", value));

@@ -45,6 +45,11 @@ public class Article implements Serializable {
     private String topic;
 
     /**
+     * 发布平台：default/wechat_official/xiaohongshu/weibo，可为空
+     */
+    private String platform;
+
+    /**
      * 用户补充描述
      */
     private String userDescription;

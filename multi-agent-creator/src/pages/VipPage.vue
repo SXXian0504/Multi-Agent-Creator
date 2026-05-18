@@ -137,7 +137,7 @@ const features = [
   {
     icon: PictureOutlined,
     title: 'AI 智能生图',
-    desc: '使用 Nano Banana AI 生成独特配图'
+    desc: '使用百炼文生图生成独特配图'
   },
   {
     icon: AppstoreOutlined,

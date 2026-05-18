@@ -55,14 +55,15 @@ public class ArticleAsyncService {
      *
      * @param taskId 任务ID
      * @param topic  选题
+     * @param platform 发布平台（可为空）
      * @param style  文章风格（可为空）
      * @param wordRange 字数范围（可为空）
      */
     @Async("articleExecutor")
-    public void executePhase1(String taskId, String topic, String style, String wordRange) {
+    public void executePhase1(String taskId, String topic, String platform, String style, String wordRange) {
         boolean useOrchestrator = agentConfig.isOrchestratorEnabled();
-        log.info("阶段1异步任务开始, taskId={}, topic={}, style={}, wordRange={}, 使用多智能体编排={}",
-                taskId, topic, style, wordRange, useOrchestrator);
+        log.info("阶段1异步任务开始, taskId={}, topic={}, platform={}, style={}, wordRange={}, 使用多智能体编排={}",
+                taskId, topic, platform, style, wordRange, useOrchestrator);
 
         try {
             // 更新状态和阶段
@@ -73,6 +74,7 @@ public class ArticleAsyncService {
             ArticleState state = new ArticleState();
             state.setTaskId(taskId);
             state.setTopic(topic);
+            state.setPlatform(platform);
             state.setStyle(style);
             state.setWordRange(wordRange);
 
@@ -139,6 +141,7 @@ public class ArticleAsyncService {
             ArticleState state = new ArticleState();
             state.setTaskId(taskId);
             state.setTopic(article.getTopic());
+            state.setPlatform(article.getPlatform());
             state.setStyle(article.getStyle());
             state.setWordRange(article.getWordRange());
             state.setUserDescription(article.getUserDescription());
@@ -214,6 +217,7 @@ public class ArticleAsyncService {
             ArticleState state = new ArticleState();
             state.setTaskId(taskId);
             state.setTopic(article.getTopic());
+            state.setPlatform(article.getPlatform());
             state.setStyle(article.getStyle());
             state.setWordRange(article.getWordRange());
             state.setUserDescription(article.getUserDescription());
@@ -371,6 +375,7 @@ public class ArticleAsyncService {
         } else if (SseMessageTypeEnum.AGENT4_COMPLETE.getValue().equals(message)) {
             articleService.updatePhase(state.getTaskId(), ArticlePhaseEnum.IMAGE_EXECUTING);
             data.put("type", SseMessageTypeEnum.AGENT4_COMPLETE.getValue());
+            data.put("content", state.getContent());
             data.put("imageRequirements", state.getImageRequirements());
             data.put("reviewResult", state.getImagePlanReviewResult());
         } else if (SseMessageTypeEnum.AGENT5_COMPLETE.getValue().equals(message)) {
@@ -378,9 +383,12 @@ public class ArticleAsyncService {
             data.put("type", SseMessageTypeEnum.AGENT5_COMPLETE.getValue());
             data.put("images", state.getImages());
             data.put("imageReviewResults", state.getImageReviewResults());
+            data.put("imageExecutionTraces", state.getImageExecutionTraces());
         } else if (SseMessageTypeEnum.MERGE_COMPLETE.getValue().equals(message)) {
             data.put("type", SseMessageTypeEnum.MERGE_COMPLETE.getValue());
             data.put("fullContent", state.getFullContent());
+            data.put("images", state.getImages());
+            data.put("coverImage", state.getCoverImage());
         } else {
             return null;
         }

@@ -150,6 +150,7 @@ public class ImageServiceStrategy {
             case PEXELS -> "pexels";
             case NANO_BANANA -> "nano-banana";
             case MERMAID -> "mermaid";
+            case GRAPHVIZ -> "graphviz";
             case ICONIFY -> "iconify";
             case EMOJI_PACK -> "emoji-pack";
             case SVG_DIAGRAM -> "svg-diagram";

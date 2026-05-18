@@ -33,7 +33,7 @@ public class ImageGenerationTool {
     /**
      * 根据需求生成或搜索图片
      *
-     * @param imageSource 图片来源类型（PEXELS/NANO_BANANA/MERMAID/ICONIFY/EMOJI_PACK/SVG_DIAGRAM）
+     * @param imageSource 图片来源类型（PEXELS/QWEN_IMAGE/NANO_BANANA/GRAPHVIZ/MERMAID/ICONIFY/EMOJI_PACK/SVG_DIAGRAM）
      * @param keywords    搜索关键词（用于图库检索）
      * @param prompt      AI 生图提示词或 Mermaid/SVG 代码
      * @param position    图片位置序号
@@ -41,11 +41,11 @@ public class ImageGenerationTool {
      * @param sectionTitle 章节标题
      * @return 图片生成结果的 JSON 字符串
      */
-    @Tool(description = "根据需求生成或搜索图片。支持多种图片来源：PEXELS（真实照片）、NANO_BANANA（AI生图）、MERMAID（流程图）、ICONIFY（图标）、EMOJI_PACK（表情包）、SVG_DIAGRAM（概念示意图）")
+    @Tool(description = "根据需求生成或搜索图片。支持多种图片来源：PEXELS（真实照片）、QWEN_IMAGE（百炼文生图）、NANO_BANANA（旧AI生图）、GRAPHVIZ（DOT流程图）、MERMAID（流程图）、ICONIFY（图标）、EMOJI_PACK（表情包）、SVG_DIAGRAM（概念示意图）")
     public String generateImage(
-            @ToolParam(description = "图片来源类型：PEXELS/NANO_BANANA/MERMAID/ICONIFY/EMOJI_PACK/SVG_DIAGRAM") String imageSource,
+            @ToolParam(description = "图片来源类型：PEXELS/QWEN_IMAGE/NANO_BANANA/GRAPHVIZ/MERMAID/ICONIFY/EMOJI_PACK/SVG_DIAGRAM") String imageSource,
             @ToolParam(description = "搜索关键词（用于 PEXELS/ICONIFY/EMOJI_PACK）") String keywords,
-            @ToolParam(description = "AI 生图提示词或图表代码（用于 NANO_BANANA/MERMAID/SVG_DIAGRAM）") String prompt,
+            @ToolParam(description = "AI 生图提示词或图表代码（用于 QWEN_IMAGE/NANO_BANANA/GRAPHVIZ/MERMAID/SVG_DIAGRAM）") String prompt,
             @ToolParam(description = "图片位置序号，封面为1，其他为章节顺序") Integer position,
             @ToolParam(description = "图片类型：cover（封面）或 section（章节配图）") String type,
             @ToolParam(description = "对应的章节标题，封面图留空") String sectionTitle) {

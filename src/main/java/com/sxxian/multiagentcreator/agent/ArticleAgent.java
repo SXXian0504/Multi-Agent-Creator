@@ -9,10 +9,10 @@ import com.sxxian.multiagentcreator.model.dto.article.ArticleContext;
 import com.sxxian.multiagentcreator.model.dto.article.ArticleState;
 import com.sxxian.multiagentcreator.model.dto.review.ReviewResult;
 import com.sxxian.multiagentcreator.model.enums.ArticlePhaseEnum;
-import com.sxxian.multiagentcreator.model.enums.ArticleStyleEnum;
 import com.sxxian.multiagentcreator.model.enums.SseMessageTypeEnum;
 import com.sxxian.multiagentcreator.model.enums.StructuredOutputTypeEnum;
 import com.sxxian.multiagentcreator.service.JsonStructuredOutputService;
+import com.sxxian.multiagentcreator.service.SkillService;
 import com.sxxian.multiagentcreator.utils.ArticlePromptUtils;
 import com.sxxian.multiagentcreator.utils.GsonUtils;
 import com.google.gson.reflect.TypeToken;
@@ -41,6 +41,7 @@ public class ArticleAgent {
     private final DashScopeChatModel chatModel;
     private final JsonStructuredOutputService jsonStructuredOutputService;
     private final ReviewAgent reviewAgent;
+    private final SkillService skillService;
 
     @AgentExecution(value = "article_agent_generate_titles", description = "ArticleAgent生成标题", phase = "TITLE_GENERATING")
     public ArticleContext generateTitles(ArticleContext context) {
@@ -48,7 +49,7 @@ public class ArticleAgent {
                 .replace("{topic}", context.getTopic())
                 + buildFeedbackPrompt(context, ArticlePhaseEnum.TITLE_GENERATING)
                 + getWordRangePrompt(context.getWordRange())
-                + getStylePrompt(context.getStyle());
+                + skillService.buildPromptInstruction(context.getPlatform(), context.getStyle(), context.getWordRange());
 
         List<ArticleState.TitleOption> titleOptions = generateTitleOptions(prompt);
 
@@ -82,7 +83,7 @@ public class ArticleAgent {
                 .replace("{descriptionSection}", descriptionSection)
                 + buildFeedbackPrompt(context, ArticlePhaseEnum.OUTLINE_GENERATING)
                 + ArticlePromptUtils.getOutlineWordRangePrompt(context.getWordRange(), context.getStyle())
-                + getStylePrompt(context.getStyle());
+                + skillService.buildPromptInstruction(context.getPlatform(), context.getStyle(), context.getWordRange());
 
         ArticleState.OutlineResult outlineResult = generateOutlineResult(prompt, streamHandler);
 
@@ -112,7 +113,7 @@ public class ArticleAgent {
                 .replace("{outline}", outlineText)
                 + buildFeedbackPrompt(context, ArticlePhaseEnum.CONTENT_GENERATING)
                 + getWordRangePrompt(context.getWordRange())
-                + getStylePrompt(context.getStyle());
+                + skillService.buildPromptInstruction(context.getPlatform(), context.getStyle(), context.getWordRange());
 
         String content = callLlmWithStreaming(prompt, streamHandler, SseMessageTypeEnum.AGENT3_STREAMING);
         context.setContent(content);
@@ -157,6 +158,7 @@ public class ArticleAgent {
         ArticleContext context = new ArticleContext();
         context.setTaskId(readString(state, "taskId", null));
         context.setTopic(readString(state, "topic", true));
+        context.setPlatform(readString(state, "platform", null));
         context.setStyle(readString(state, "style", null));
         context.setWordRange(readString(state, "wordRange", null));
 
@@ -172,6 +174,7 @@ public class ArticleAgent {
         ArticleContext context = new ArticleContext();
         context.setTaskId(readString(state, "taskId", null));
         context.setTopic(readString(state, "topic", null));
+        context.setPlatform(readString(state, "platform", null));
         context.setStyle(readString(state, "style", null));
         context.setWordRange(readString(state, "wordRange", null));
         context.setUserDescription(readString(state, "userDescription", null));
@@ -193,6 +196,7 @@ public class ArticleAgent {
         ArticleContext context = new ArticleContext();
         context.setTaskId(readString(state, "taskId", null));
         context.setTopic(readString(state, "topic", null));
+        context.setPlatform(readString(state, "platform", null));
         context.setStyle(readString(state, "style", null));
         context.setWordRange(readString(state, "wordRange", null));
         context.setUserDescription(readString(state, "userDescription", null));
@@ -289,25 +293,6 @@ public class ArticleAgent {
                     }
                     return null;
                 });
-    }
-
-    private String getStylePrompt(String style) {
-        if (style == null || style.isEmpty()) {
-            return "";
-        }
-
-        ArticleStyleEnum styleEnum = ArticleStyleEnum.getEnumByValue(style);
-        if (styleEnum == null) {
-            return "";
-        }
-
-        return switch (styleEnum) {
-            case TECH -> PromptConstant.STYLE_TECH_PROMPT;
-            case EMOTIONAL -> PromptConstant.STYLE_EMOTIONAL_PROMPT;
-            case EDUCATIONAL -> PromptConstant.STYLE_EDUCATIONAL_PROMPT;
-            case HUMOROUS -> PromptConstant.STYLE_HUMOROUS_PROMPT;
-            case MARKETING -> PromptConstant.STYLE_MARKETING_PROMPT;
-        };
     }
 
     private String getWordRangePrompt(String wordRange) {

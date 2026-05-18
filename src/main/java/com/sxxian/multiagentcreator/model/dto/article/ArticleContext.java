@@ -23,6 +23,8 @@ public class ArticleContext implements Serializable {
 
     private String topic;
 
+    private String platform;
+
     private String userDescription;
 
     private String style;
@@ -53,6 +55,7 @@ public class ArticleContext implements Serializable {
         ArticleContext context = new ArticleContext();
         context.setTaskId(state.getTaskId());
         context.setTopic(state.getTopic());
+        context.setPlatform(state.getPlatform());
         context.setUserDescription(state.getUserDescription());
         context.setStyle(state.getStyle());
         context.setWordRange(state.getWordRange());
@@ -70,6 +73,7 @@ public class ArticleContext implements Serializable {
     public void applyToState(ArticleState state) {
         state.setTaskId(taskId);
         state.setTopic(topic);
+        state.setPlatform(platform);
         state.setUserDescription(userDescription);
         state.setStyle(style);
         state.setWordRange(wordRange);

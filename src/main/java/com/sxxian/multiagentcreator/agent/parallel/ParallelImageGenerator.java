@@ -173,6 +173,7 @@ public class ParallelImageGenerator implements NodeAction {
         ArticleState reviewState = new ArticleState();
         state.value("taskId").ifPresent(v -> reviewState.setTaskId(v.toString()));
         state.value("topic").ifPresent(v -> reviewState.setTopic(v.toString()));
+        state.value("platform").ifPresent(v -> reviewState.setPlatform(v.toString()));
         state.value("style").ifPresent(v -> reviewState.setStyle(v.toString()));
         ArticleState.TitleResult title = new ArticleState.TitleResult();
         state.value("mainTitle").ifPresent(v -> title.setMainTitle(v.toString()));

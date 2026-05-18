@@ -67,7 +67,12 @@ public class MermaidService implements ImageSearchService {
         try {
             // 创建临时输入文件
             tempInputFile = FileUtil.createTempFile("mermaid_input_", ".mmd", true);
-            FileUtil.writeUtf8String(mermaidCode, tempInputFile);
+            String sanitizedMermaidCode = sanitizeMermaidCode(mermaidCode);
+            if (!sanitizedMermaidCode.equals(mermaidCode)) {
+                log.info("Mermaid code sanitized before rendering");
+                log.debug("Sanitized Mermaid code:\n{}", sanitizedMermaidCode);
+            }
+            FileUtil.writeUtf8String(sanitizedMermaidCode, tempInputFile);
 
             // 创建临时输出文件
             String outputExtension = "." + mermaidConfig.getOutputFormat();
@@ -118,6 +123,132 @@ public class MermaidService implements ImageSearchService {
     /**
      * 调用 Mermaid CLI 转换为图片
      */
+    static String sanitizeMermaidCode(String mermaidCode) {
+        String code = stripMarkdownFence(mermaidCode);
+        return quoteComplexNodeLabels(code);
+    }
+
+    private static String stripMarkdownFence(String mermaidCode) {
+        String code = mermaidCode == null ? "" : mermaidCode.trim();
+        if (!code.startsWith("```")) {
+            return code;
+        }
+
+        int firstLineEnd = code.indexOf('\n');
+        if (firstLineEnd < 0) {
+            return code;
+        }
+
+        int fenceEnd = code.lastIndexOf("```");
+        if (fenceEnd <= firstLineEnd) {
+            return code.substring(firstLineEnd + 1).trim();
+        }
+
+        return code.substring(firstLineEnd + 1, fenceEnd).trim();
+    }
+
+    private static String quoteComplexNodeLabels(String code) {
+        StringBuilder result = new StringBuilder(code.length());
+        int index = 0;
+        while (index < code.length()) {
+            char current = code.charAt(index);
+            if (!isIdentifierStart(current)) {
+                result.append(current);
+                index++;
+                continue;
+            }
+
+            int idStart = index;
+            int idEnd = index + 1;
+            while (idEnd < code.length() && isIdentifierPart(code.charAt(idEnd))) {
+                idEnd++;
+            }
+
+            int labelStart = idEnd;
+            while (labelStart < code.length() && (code.charAt(labelStart) == ' ' || code.charAt(labelStart) == '\t')) {
+                labelStart++;
+            }
+
+            if (labelStart >= code.length() || !isNodeLabelOpen(code.charAt(labelStart))) {
+                result.append(code, idStart, idEnd);
+                index = idEnd;
+                continue;
+            }
+
+            char open = code.charAt(labelStart);
+            char close = matchingClose(open);
+            int labelEnd = findLabelEnd(code, labelStart + 1, close);
+            if (labelEnd < 0) {
+                result.append(code, idStart, idEnd);
+                index = idEnd;
+                continue;
+            }
+
+            String label = code.substring(labelStart + 1, labelEnd);
+            result.append(code, idStart, idEnd);
+            result.append(code, idEnd, labelStart);
+            appendQuotedLabel(result, open, close, label);
+            index = labelEnd + 1;
+        }
+        return result.toString();
+    }
+
+    private static void appendQuotedLabel(StringBuilder result, char open, char close, String label) {
+        String normalized = normalizeLabel(label);
+        result.append(open).append('"').append(normalized).append('"').append(close);
+    }
+
+    private static String normalizeLabel(String label) {
+        String value = label.trim();
+        if ((value.startsWith("\"") && value.endsWith("\""))
+                || (value.startsWith("'") && value.endsWith("'"))
+                || (value.startsWith("`") && value.endsWith("`"))) {
+            value = value.substring(1, value.length() - 1);
+        }
+        return value
+                .replace("\\n", "<br/>")
+                .replace("\r\n", "<br/>")
+                .replace("\n", "<br/>")
+                .replace("\r", "<br/>")
+                .replace("\"", "&quot;");
+    }
+
+    private static boolean isIdentifierStart(char value) {
+        return Character.isLetter(value) || value == '_';
+    }
+
+    private static boolean isIdentifierPart(char value) {
+        return Character.isLetterOrDigit(value) || value == '_' || value == '-';
+    }
+
+    private static boolean isNodeLabelOpen(char value) {
+        return value == '[' || value == '(' || value == '{';
+    }
+
+    private static char matchingClose(char open) {
+        return switch (open) {
+            case '[' -> ']';
+            case '(' -> ')';
+            case '{' -> '}';
+            default -> open;
+        };
+    }
+
+    private static int findLabelEnd(String code, int start, char close) {
+        boolean inDoubleQuote = false;
+        for (int i = start; i < code.length(); i++) {
+            char current = code.charAt(i);
+            if (current == '"' && (i == 0 || code.charAt(i - 1) != '\\')) {
+                inDoubleQuote = !inDoubleQuote;
+                continue;
+            }
+            if (!inDoubleQuote && current == close) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
 //    private void convertMermaidToImage(File inputFile, File outputFile) {
 //        try {
 //            // 根据操作系统选择命令

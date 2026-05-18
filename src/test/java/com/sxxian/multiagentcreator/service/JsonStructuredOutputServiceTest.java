@@ -1,6 +1,8 @@
 package com.sxxian.multiagentcreator.service;
 
 import com.google.gson.reflect.TypeToken;
+import com.sxxian.multiagentcreator.agent.agents.ContentMergerAgent;
+import com.sxxian.multiagentcreator.agent.ImageAgent;
 import com.sxxian.multiagentcreator.exception.StructuredOutputException;
 import com.sxxian.multiagentcreator.model.dto.article.ArticleState;
 import com.sxxian.multiagentcreator.model.dto.review.ImageReviewResult;
@@ -93,6 +95,7 @@ class JsonStructuredOutputServiceTest {
                       "type": "cover",
                       "sectionTitle": "",
                       "imageSource": "UNKNOWN",
+                      "reason": "测试非法图片来源",
                       "keywords": "office",
                       "prompt": "",
                       "placeholderId": ""
@@ -106,6 +109,121 @@ class JsonStructuredOutputServiceTest {
                 ArticleState.Agent4Result.class,
                 StructuredOutputTypeEnum.IMAGE_PLAN
         ));
+    }
+
+    @Test
+    void rejectsImagePlanWithoutReason() {
+        String raw = """
+                {
+                  "contentWithPlaceholders": "正文\\n{{IMAGE_PLACEHOLDER_1}}",
+                  "imageRequirements": [
+                    {
+                      "position": 1,
+                      "type": "cover",
+                      "sectionTitle": "",
+                      "imageSource": "PEXELS",
+                      "keywords": "office",
+                      "prompt": "",
+                      "placeholderId": ""
+                    }
+                  ]
+                }
+                """;
+
+        assertThrows(StructuredOutputException.class, () -> service.parse(
+                raw,
+                ArticleState.Agent4Result.class,
+                StructuredOutputTypeEnum.IMAGE_PLAN
+        ));
+    }
+
+    @Test
+    void parsesOutlineImagePlanWithoutContentPlaceholders() {
+        String raw = """
+                {
+                  "imageRequirements": [
+                    {
+                      "position": 1,
+                      "type": "cover",
+                      "sectionTitle": "",
+                      "imageSource": "PEXELS",
+                      "reason": "封面图先确定整体视觉方向",
+                      "keywords": "startup office",
+                      "prompt": "",
+                      "placeholderId": ""
+                    }
+                  ]
+                }
+                """;
+
+        ArticleState.Agent4Result result = service.parse(
+                raw,
+                ArticleState.Agent4Result.class,
+                StructuredOutputTypeEnum.OUTLINE_IMAGE_PLAN
+        );
+
+        assertEquals(1, result.getImageRequirements().size());
+    }
+
+    @Test
+    void rejectsOutlineImagePlanWithoutReason() {
+        String raw = """
+                {
+                  "imageRequirements": [
+                    {
+                      "position": 1,
+                      "type": "cover",
+                      "sectionTitle": "",
+                      "imageSource": "PEXELS",
+                      "keywords": "startup office",
+                      "prompt": "",
+                      "placeholderId": ""
+                    }
+                  ]
+                }
+                """;
+
+        assertThrows(StructuredOutputException.class, () -> service.parse(
+                raw,
+                ArticleState.Agent4Result.class,
+                StructuredOutputTypeEnum.OUTLINE_IMAGE_PLAN
+        ));
+    }
+
+    @Test
+    void contentMergerInsertsImageAfterMatchingSectionWhenPlaceholderIsAbsent() {
+        ContentMergerAgent mergerAgent = new ContentMergerAgent();
+        ArticleState.ImageResult image = new ArticleState.ImageResult();
+        image.setPosition(2);
+        image.setSectionTitle("解决方案");
+        image.setUrl("https://example.com/image.png");
+        image.setDescription("solution");
+
+        String fullContent = mergerAgent.mergeImagesIntoContent("""
+                # 标题
+
+                ## 痛点
+                内容
+
+                ## 解决方案
+                内容
+                """, List.of(image));
+
+        assertTrue(fullContent.contains("![solution](https://example.com/image.png)"));
+        assertTrue(fullContent.indexOf("## 解决方案") < fullContent.indexOf("![solution](https://example.com/image.png)"));
+    }
+
+    @Test
+    void imageCountPolicyKeepsShortAndMarketingCompact() {
+        assertEquals(2, ImageAgent.maxImageCount("short", "tech", 500));
+        assertEquals(1, ImageAgent.maxImageCount("short", "marketing", 500));
+        assertEquals(1, ImageAgent.maxImageCount(null, "marketing", 900));
+    }
+
+    @Test
+    void imageCountPolicyAllowsMoreImagesForLongContent() {
+        assertEquals(3, ImageAgent.maxImageCount("medium", "tech", 1200));
+        assertEquals(5, ImageAgent.maxImageCount("long", "tech", 2200));
     }
 
     @Test
@@ -276,7 +394,7 @@ class JsonStructuredOutputServiceTest {
     }
 
     @Test
-    void rejectsTextReviewWhenDimensionScoresDoNotMatchScore() {
+    void normalizesTextReviewScoreFromDimensionScoresWhenTheyDoNotMatch() {
         String raw = """
                 {
                   "approved": true,
@@ -292,11 +410,14 @@ class JsonStructuredOutputServiceTest {
                 }
                 """;
 
-        assertThrows(StructuredOutputException.class, () -> service.parse(
+        ReviewResult result = service.parse(
                 raw,
                 ReviewResult.class,
                 StructuredOutputTypeEnum.REVIEW_RESULT
-        ));
+        );
+
+        assertEquals(84, result.getScore());
+        assertTrue(result.isApprovedByThreshold());
     }
 
     @Test

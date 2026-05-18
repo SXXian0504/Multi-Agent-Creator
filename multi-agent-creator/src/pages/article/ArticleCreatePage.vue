@@ -59,6 +59,23 @@
                 class="topic-textarea"
               />
 
+              <!-- 发布平台选择 -->
+              <div class="platform-section">
+                <div class="section-header">
+                  <span class="section-title">发布平台</span>
+                  <span class="section-tip">（决定文章结构和平台语感）</span>
+                </div>
+                <a-radio-group v-model:value="selectedPlatform" class="platform-group option-group">
+                  <a-radio
+                    v-for="platformOption in platformOptions"
+                    :key="platformOption.value"
+                    :value="platformOption.value"
+                  >
+                    {{ platformOption.label }}
+                  </a-radio>
+                </a-radio-group>
+              </div>
+
               <!-- 字数范围选择 -->
               <div class="word-range-section">
                 <div class="section-header">
@@ -79,8 +96,8 @@
               <!-- 文章风格选择 -->
               <div class="style-section">
                 <div class="section-header">
-                  <span class="section-title">文章风格</span>
-                  <span class="section-tip">（不选择使用默认风格）</span>
+                  <span class="section-title">内容风格</span>
+                  <span class="section-tip">（决定专业语气和表达方式）</span>
                 </div>
                 <a-radio-group v-model:value="selectedStyle" class="style-group option-group">
                   <a-radio
@@ -102,11 +119,12 @@
                 <a-checkbox-group v-model:value="selectedImageMethods" class="methods-group">
                   <a-checkbox value="PEXELS">Pexels</a-checkbox>
                   <a-tooltip :title="isVip ? '' : '仅限 VIP 会员'">
-                    <a-checkbox value="NANO_BANANA" :disabled="!isVip">
-                      Nano Banana
+                    <a-checkbox value="QWEN_IMAGE" :disabled="!isVip">
+                      百炼文生图
                       <CrownOutlined v-if="!isVip" class="vip-icon" />
                     </a-checkbox>
                   </a-tooltip>
+                  <a-checkbox value="GRAPHVIZ">Graphviz</a-checkbox>
                   <a-checkbox value="MERMAID">Mermaid</a-checkbox>
                   <a-checkbox value="ICONIFY">Iconify</a-checkbox>
                   <a-checkbox value="EMOJI_PACK">表情包</a-checkbox>
@@ -236,7 +254,7 @@
 
           <!-- 正文预览（流式输出） -->
           <div v-if="article.content" class="content-preview">
-            <div v-html="markdownToHtml(article.content)" class="markdown-body"></div>
+            <div v-html="markdownToHtml(article.content, article.images)" class="markdown-body"></div>
             <span v-if="isStreaming" class="typing-cursor">|</span>
           </div>
 
@@ -269,7 +287,7 @@
             <p class="article-subtitle">{{ article.subTitle }}</p>
           </div>
           <div class="content-preview">
-            <div v-html="markdownToHtml(article.fullContent || article.content || '')" class="markdown-body"></div>
+            <div v-html="markdownToHtml(article.fullContent || article.content || '', article.images)" class="markdown-body"></div>
           </div>
           </div>
         </Transition>
@@ -578,10 +596,10 @@ import {
   CrownOutlined,
   FileTextOutlined
 } from '@ant-design/icons-vue'
-import { createArticle, confirmTitle, confirmOutline } from '@/api/articleController'
+import { createArticle, confirmTitle, confirmOutline, getWritingSkills } from '@/api/articleController'
 import { connectSSE, closeSSE, type SSEMessage } from '@/utils/sse'
 import { isAdmin as checkIsAdmin, isVip as checkIsVip, hasQuota as checkHasQuota } from '@/utils/permission'
-import { marked } from 'marked'
+import { articleMarkdownToHtml } from '@/utils/markdown'
 import TitleSelectingStage from './components/TitleSelectingStage.vue'
 import OutlineEditingStage from './components/OutlineEditingStage.vue'
 
@@ -615,7 +633,7 @@ const exampleTopics = [
   '健康饮食指南',
 ]
 
-const articleStyleOptions = [
+const defaultArticleStyleOptions = [
   { value: '', label: '默认' },
   { value: 'tech', label: '科技风格' },
   { value: 'marketing', label: '商品营销' },
@@ -623,6 +641,16 @@ const articleStyleOptions = [
   { value: 'educational', label: '教育风格' },
   { value: 'humorous', label: '轻松幽默' },
 ]
+
+const defaultPlatformOptions = [
+  { value: '', label: '默认' },
+  { value: 'wechat_official', label: '公众号' },
+  { value: 'xiaohongshu', label: '小红书' },
+  { value: 'weibo', label: '微博' },
+]
+
+const articleStyleOptions = ref(defaultArticleStyleOptions)
+const platformOptions = ref(defaultPlatformOptions)
 
 const wordRangeOptions = [
   { value: '', label: '自动评估' },
@@ -636,6 +664,7 @@ const currentPhase = ref<string>('INPUT')  // INPUT, TITLE_SELECTING, OUTLINE_ED
 
 // 状态
 const topic = ref('')
+const selectedPlatform = ref('')
 const selectedWordRange = ref('')  // 选中的字数范围（空字符串表示由 AI 自动评估）
 const selectedStyle = ref('')  // 选中的文章风格（空字符串表示默认）
 const selectedImageMethods = ref<string[]>([])  // 选中的配图方式（空数组表示全部）
@@ -723,6 +752,10 @@ const imageCount = ref(0)
 const totalImages = ref(5)
 const imageProgress = ref(0)
 
+const advanceStep = (step: number) => {
+  currentStep.value = Math.max(currentStep.value, step)
+}
+
 // 文章数据
 const article = ref<Partial<API.ArticleVO>>({
   mainTitle: '',
@@ -735,8 +768,8 @@ const article = ref<Partial<API.ArticleVO>>({
 let eventSource: EventSource | null = null
 
 // Markdown 转 HTML
-const markdownToHtml = (markdown: string | undefined) => {
-  return marked(markdown || '')
+const markdownToHtml = (markdown: string | undefined, images?: API.ImageItem[]) => {
+  return articleMarkdownToHtml(markdown, images)
 }
 
 // 自动滚动到底部
@@ -769,6 +802,7 @@ const startCreate = async () => {
     // 创建任务
     const res = await createArticle({
       topic: topic.value,
+      platform: selectedPlatform.value || undefined,
       style: selectedStyle.value || undefined,
       wordRange: selectedWordRange.value || undefined,
       enabledImageMethods: selectedImageMethods.value.length > 0 ? selectedImageMethods.value : undefined
@@ -824,7 +858,7 @@ const handleSSEMessage = (msg: SSEMessage) => {
     case 'AGENT1_COMPLETE':
       // 智能体1完成，进入标题生成阶段（显示加载）
       currentPhase.value = 'TITLE_GENERATING'
-      currentStep.value = 1
+      advanceStep(1)
       addLog('智能体1：标题方案生成完成', 'success')
       break
 
@@ -862,7 +896,7 @@ const handleSSEMessage = (msg: SSEMessage) => {
     case 'AGENT3_STREAMING':
       // 正文流式输出，进入步骤2（撰写正文）
       currentPhase.value = 'CONTENT_GENERATING'
-      currentStep.value = 2
+      advanceStep(2)
       isStreaming.value = true
       article.value.content += msg.content || ''
       scrollToBottom()
@@ -871,34 +905,58 @@ const handleSSEMessage = (msg: SSEMessage) => {
     case 'AGENT3_COMPLETE':
       // 正文完成，进入配图分析步骤
       isStreaming.value = false
-      currentStep.value = 3
+      isStreaming.value = false
+      advanceStep(3)
       addLog('正文生成完成', 'success')
       break
 
     case 'AGENT4_COMPLETE':
       // 配图分析完成，进入配图生成步骤
-      currentStep.value = 4
-      totalImages.value = msg.imageRequirements?.length || 5
+      advanceStep(4)
+      advanceStep(4)
+      imageProgress.value = Math.max(imageProgress.value, 1)
+      if (msg.content) {
+        article.value.content = msg.content
+      }
+      totalImages.value = msg.imageRequirements?.length || totalImages.value || 5
       addLog(`配图需求分析完成，共 ${totalImages.value} 张`, 'success')
       break
 
     case 'IMAGE_COMPLETE':
       // 单张配图完成
+      advanceStep(4)
       imageCount.value++
+      totalImages.value = Math.max(totalImages.value || 0, imageCount.value)
       imageProgress.value = Math.round((imageCount.value / totalImages.value) * 100)
+      if (msg.image?.url) {
+        const images = article.value.images || []
+        const imageKey = msg.image.placeholderId || msg.image.position
+        const exists = images.some((image) => (image.placeholderId || image.position) === imageKey)
+        if (!exists) {
+          article.value.images = [...images, msg.image]
+        }
+      }
       addLog(`配图生成中 ${imageCount.value}/${totalImages.value}`, 'info')
       break
 
     case 'AGENT5_COMPLETE':
       // 所有配图完成，进入图文合成步骤
-      currentStep.value = 5
-      article.value.images = msg.images
+      advanceStep(5)
+      if (msg.images) {
+        article.value.images = msg.images
+      }
       addLog('所有配图生成完成', 'success')
       break
 
     case 'MERGE_COMPLETE':
       // 图文合成完成
       article.value.fullContent = msg.fullContent
+      if (msg.images) {
+        article.value.images = msg.images
+      }
+      if (msg.coverImage) {
+        article.value.coverImage = msg.coverImage
+      }
       scrollToBottom()
       addLog('图文合成完成', 'success')
       break
@@ -906,7 +964,7 @@ const handleSSEMessage = (msg: SSEMessage) => {
     case 'ALL_COMPLETE':
       // 全部完成
       currentPhase.value = 'COMPLETED'
-      currentStep.value = 6
+      advanceStep(6)
       isCompleted.value = true
       message.success('文章创作完成!')
       addLog('✨ 文章创作完成！', 'success')
@@ -1023,6 +1081,7 @@ const viewArticle = () => {
 const resetCreate = () => {
   currentPhase.value = 'INPUT'
   topic.value = ''
+  selectedPlatform.value = ''
   selectedStyle.value = ''
   titleOptions.value = []
   outline.value = []
@@ -1050,7 +1109,33 @@ onMounted(() => {
   if (route.query.topic) {
     topic.value = route.query.topic as string
   }
+  loadWritingSkillOptions()
 })
+
+const loadWritingSkillOptions = async () => {
+  try {
+    const res = await getWritingSkills()
+    const options = res.data.data
+    if (options?.platforms?.length) {
+      platformOptions.value = [
+        { value: '', label: '默认' },
+        ...options.platforms
+          .filter((item) => item.id && item.id !== 'default')
+          .map((item) => ({ value: item.id || '', label: item.label || item.id || '' })),
+      ]
+    }
+    if (options?.contentStyles?.length) {
+      articleStyleOptions.value = [
+        { value: '', label: '默认' },
+        ...options.contentStyles
+          .filter((item) => item.id)
+          .map((item) => ({ value: item.id || '', label: item.label || item.id || '' })),
+      ]
+    }
+  } catch (error) {
+    console.warn('加载写作 Skill 选项失败，使用本地默认选项', error)
+  }
+}
 
 // 组件卸载前关闭 SSE
 onBeforeUnmount(() => {
@@ -1311,6 +1396,7 @@ onBeforeUnmount(() => {
 }
 
 /* 字数范围和文章风格选择 */
+.platform-section,
 .word-range-section,
 .style-section {
   padding: 16px;
@@ -1545,6 +1631,11 @@ onBeforeUnmount(() => {
     text-indent: 2em;
   }
 
+  :deep(p:has(> img)) {
+    text-indent: 0;
+    margin: 28px 0;
+  }
+
   :deep(img) {
     display: block;
     max-width: 100%;
@@ -1559,8 +1650,32 @@ onBeforeUnmount(() => {
 
   // Mermaid 图表特殊处理（SVG 格式）
   :deep(img[src$=".svg"]) {
-    max-width: 800px;
-    max-height: 500px;
+    width: min(100%, 760px);
+    max-width: 100%;
+    max-height: 430px;
+    padding: 12px;
+    box-sizing: border-box;
+    background: #ffffff;
+    border: 1px solid var(--color-border-light);
+    box-shadow: var(--shadow-sm);
+    object-fit: contain;
+  }
+
+  :deep(.article-cover-paragraph) {
+    margin: 18px 0 28px;
+    text-align: center;
+  }
+
+  :deep(img.article-cover-image) {
+    width: auto !important;
+    max-width: min(100%, 720px) !important;
+    max-height: 360px !important;
+    padding: 12px;
+    box-sizing: border-box;
+    background: #ffffff;
+    border: 1px solid var(--color-border-light);
+    box-shadow: var(--shadow-sm);
+    object-fit: contain;
   }
 }
 

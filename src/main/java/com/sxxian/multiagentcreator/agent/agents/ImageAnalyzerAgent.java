@@ -126,6 +126,7 @@ public class ImageAnalyzerAgent implements NodeAction {
         ArticleState reviewState = new ArticleState();
         sourceState.value("taskId").ifPresent(v -> reviewState.setTaskId(v.toString()));
         sourceState.value("topic").ifPresent(v -> reviewState.setTopic(v.toString()));
+        sourceState.value("platform").ifPresent(v -> reviewState.setPlatform(v.toString()));
         sourceState.value("style").ifPresent(v -> reviewState.setStyle(v.toString()));
         ArticleState.TitleResult title = new ArticleState.TitleResult();
         title.setMainTitle(mainTitle);
@@ -162,8 +163,9 @@ public class ImageAnalyzerAgent implements NodeAction {
     private String getAllMethodsDescription() {
         return """
                - PEXELS: 适合真实场景、产品照片、人物照片、自然风景等写实图片
-               - NANO_BANANA: 适合创意插画、信息图表、需要文字渲染、抽象概念、艺术风格等 AI 生成图片
-               - MERMAID: 适合流程图、架构图、时序图、关系图、甘特图等结构化图表
+               - QWEN_IMAGE: 适合创意插画、信息图表、需要文字渲染、抽象概念、艺术风格等 AI 生成图片
+               - GRAPHVIZ: 适合流程图、架构图、依赖关系图等结构化图表，优先用于流程图
+               - MERMAID: 适合时序图、甘特图和 Graphviz 不适合的结构化图表
                - ICONIFY: 适合图标、符号、小型装饰性图标（如：箭头、勾选、星星、心形等）
                - EMOJI_PACK: 适合表情包、搞笑图片、轻松幽默的配图
                - SVG_DIAGRAM: 适合概念示意图、思维导图样式、逻辑关系展示（不涉及精确数据）
@@ -176,8 +178,10 @@ public class ImageAnalyzerAgent implements NodeAction {
     private String getMethodUsageDescription(ImageMethodEnum method) {
         return switch (method) {
             case PEXELS -> "适合真实场景、产品照片、人物照片、自然风景等写实图片";
-            case NANO_BANANA -> "适合创意插画、信息图表、需要文字渲染、抽象概念、艺术风格等 AI 生成图片";
-            case MERMAID -> "适合流程图、架构图、时序图、关系图、甘特图等结构化图表";
+            case QWEN_IMAGE -> "适合创意插画、信息图表、需要文字渲染、抽象概念、艺术风格等 AI 生成图片";
+            case NANO_BANANA -> "旧 Nano Banana AI 生图，当前不作为默认文生图路径";
+            case GRAPHVIZ -> "适合流程图、架构图、依赖关系图等结构化图表，优先用于流程图";
+            case MERMAID -> "适合时序图、甘特图和 Graphviz 不适合的结构化图表";
             case ICONIFY -> "适合图标、符号、小型装饰性图标（如：箭头、勾选、星星、心形等）";
             case EMOJI_PACK -> "适合表情包、搞笑图片、轻松幽默的配图";
             case SVG_DIAGRAM -> "适合概念示意图、思维导图样式、逻辑关系展示（不涉及精确数据）";
@@ -191,7 +195,7 @@ public class ImageAnalyzerAgent implements NodeAction {
     private String buildMethodUsageGuide(List<String> enabledMethods) {
         // 如果没有限制，返回所有方式的使用指南
         List<String> methodsToInclude = (enabledMethods == null || enabledMethods.isEmpty())
-                ? List.of("PEXELS", "NANO_BANANA", "MERMAID", "ICONIFY", "EMOJI_PACK", "SVG_DIAGRAM")
+                ? List.of("PEXELS", "QWEN_IMAGE", "GRAPHVIZ", "MERMAID", "ICONIFY", "EMOJI_PACK", "SVG_DIAGRAM")
                 : enabledMethods;
 
         StringBuilder sb = new StringBuilder();
@@ -213,10 +217,14 @@ public class ImageAnalyzerAgent implements NodeAction {
         return switch (method) {
             case "PEXELS" -> """
                     - PEXELS: 提供英文搜索关键词(keywords)，要准确、具体。prompt 留空。""";
+            case "QWEN_IMAGE" -> """
+                    - QWEN_IMAGE: 提供详细的英文或中文生图提示词(prompt)，描述场景、风格、细节。keywords 留空。""";
             case "NANO_BANANA" -> """
-                    - NANO_BANANA: 提供详细的英文生图提示词(prompt)，描述场景、风格、细节。keywords 留空。""";
+                    - NANO_BANANA: 旧 AI 生图路径，除非用户明确选择，否则优先改用 QWEN_IMAGE。提供详细 prompt，keywords 留空。""";
+            case "GRAPHVIZ" -> """
+                    - GRAPHVIZ: 在 prompt 字段生成完整 Graphviz DOT 代码。必须以 digraph/graph 开头；只输出 DOT，不要 markdown fence 或解释文字；流程图、架构图优先用 digraph + rankdir=LR；节点标签用双引号，长中文标签用 \\n 拆行；节点数量控制在 8 个以内，避免巨大留白；keywords 留空。""";
             case "MERMAID" -> """
-                    - MERMAID: 在 prompt 字段生成完整的 Mermaid 代码（如流程图、架构图）。keywords 留空。""";
+                    - MERMAID: 在 prompt 字段生成完整 Mermaid 代码。Graphviz 不可用或需要时序图/甘特图时使用；keywords 留空。""";
             case "ICONIFY" -> """
                     - ICONIFY: 提供英文图标关键词(keywords)，如：check、arrow、star、heart。prompt 留空。""";
             case "EMOJI_PACK" -> """

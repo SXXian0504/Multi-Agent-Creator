@@ -2,23 +2,29 @@ package com.sxxian.multiagentcreator.agent;
 
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatOptions;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.sxxian.multiagentcreator.annotation.AgentExecution;
 import com.sxxian.multiagentcreator.constant.PromptConstant;
 import com.sxxian.multiagentcreator.model.dto.article.ArticleState;
 import com.sxxian.multiagentcreator.model.dto.review.ImageReviewResult;
 import com.sxxian.multiagentcreator.model.dto.review.ReviewResult;
-import com.sxxian.multiagentcreator.model.enums.ArticleStyleEnum;
 import com.sxxian.multiagentcreator.model.enums.StructuredOutputTypeEnum;
 import com.sxxian.multiagentcreator.service.JsonStructuredOutputService;
+import com.sxxian.multiagentcreator.service.SkillService;
 import com.sxxian.multiagentcreator.utils.GsonUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
 import org.springframework.ai.content.Media;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.ByteArrayResource;
 import org.springframework.stereotype.Service;
 import org.springframework.util.MimeType;
 import org.springframework.util.MimeTypeUtils;
@@ -30,7 +36,10 @@ import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URLConnection;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @Slf4j
@@ -43,12 +52,23 @@ public class ReviewAgent {
 
     private final DashScopeChatModel chatModel;
     private final JsonStructuredOutputService jsonStructuredOutputService;
+    private final SkillService skillService;
+    private final OkHttpClient httpClient = new OkHttpClient();
+
+    @Value("${spring.ai.dashscope.api-key:}")
+    private String dashScopeApiKey;
+
+    @Value("${article.review.vision-endpoint:https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions}")
+    private String visionEndpoint;
 
     @Value("${article.review.text-model:qwen-max}")
     private String textReviewModel;
 
-    @Value("${article.review.image-model:${article.review.model:qwen-vl-plus-latest}}")
+    @Value("${article.review.image-model:${article.review.model:qwen-vl-plus}}")
     private String imageReviewModel;
+
+    @Value("${article.review.image-fallback-models:qwen3.5-plus,qwen3.5-omni-plus}")
+    private String imageFallbackModels;
 
     @AgentExecution(value = "review_titles", description = "评审标题候选", phase = "TITLE_REVIEWING")
     public ReviewResult reviewTitles(ArticleState state) {
@@ -118,14 +138,14 @@ public class ReviewAgent {
     private ReviewResult reviewText(String stageName, ArticleState state, String content, String stageRubric) {
         String prompt = PromptConstant.REVIEW_PROMPT
                 .replace("{stageName}", stageName)
-                .replace("{styleName}", getStyleName(state.getStyle()))
+                .replace("{styleName}", getStyleName(state.getPlatform(), state.getStyle()))
                 .replace("{topic}", nullToEmpty(state.getTopic()))
                 .replace("{mainTitle}", state.getTitle() != null ? nullToEmpty(state.getTitle().getMainTitle()) : "")
                 .replace("{subTitle}", state.getTitle() != null ? nullToEmpty(state.getTitle().getSubTitle()) : "")
                 .replace("{userDescription}", nullToEmpty(state.getUserDescription()))
                 .replace("{contentProfile}", buildContentProfile(stageName, state, content))
                 .replace("{content}", nullToEmpty(content))
-                .replace("{styleRubric}", styleRubric(state.getStyle()))
+                .replace("{styleRubric}", styleRubric(state.getPlatform(), state.getStyle()))
                 .replace("{stageRubric}", stageRubric);
 
         String raw = callReviewLlm(prompt);
@@ -160,23 +180,33 @@ public class ReviewAgent {
     }
 
     private String callImageReviewLlmWithFallback(String prompt, ArticleState.ImageResult imageResult) {
-        List<Media> media = imageMedia(imageResult);
-        if (media.isEmpty()) {
+        ImageReviewInput imageInput = imageReviewInput(imageResult);
+        if (imageInput == null) {
             return callReviewLlm(prompt, List.of(), textReviewModel);
         }
-        try {
-            return callReviewLlm(prompt, media, imageReviewModel);
-        } catch (RuntimeException e) {
-            if (!isImageUrlError(e)) {
-                throw e;
+        List<String> models = imageReviewModels();
+        RuntimeException lastException = null;
+        for (String model : models) {
+            try {
+                String content = callVisionReviewLlm(prompt, imageInput, model);
+                log.info("图片评审多模态调用成功, model={}, url={}",
+                        model,
+                        imageResult != null ? imageResult.getUrl() : null);
+                return content;
+            } catch (RuntimeException e) {
+                lastException = e;
+                log.warn("图片评审多模态调用失败, model={}, url={}, reason={}",
+                        model,
+                        imageResult != null ? imageResult.getUrl() : null,
+                        e.getMessage());
             }
-            log.warn("图片评审多模态调用失败，降级为纯文本评审, model={}, fallbackModel={}, url={}, reason={}",
-                    imageReviewModel,
-                    textReviewModel,
-                    imageResult != null ? imageResult.getUrl() : null,
-                    e.getMessage());
-            return callReviewLlm(prompt, List.of(), textReviewModel);
         }
+        log.warn("图片评审所有多模态模型均失败，降级为纯文本评审, models={}, fallbackModel={}, url={}, lastReason={}",
+                models,
+                textReviewModel,
+                imageResult != null ? imageResult.getUrl() : null,
+                lastException != null ? lastException.getMessage() : "");
+        return callReviewLlm(prompt, List.of(), textReviewModel);
     }
 
     private String callReviewLlm(String prompt, List<Media> media, String model) {
@@ -192,25 +222,100 @@ public class ReviewAgent {
         return response.getResult().getOutput().getText();
     }
 
-    private List<Media> imageMedia(ArticleState.ImageResult imageResult) {
+    private List<String> imageReviewModels() {
+        List<String> models = new ArrayList<>();
+        if (imageReviewModel != null && !imageReviewModel.isBlank()) {
+            models.add(imageReviewModel.trim());
+        }
+        if (imageFallbackModels != null && !imageFallbackModels.isBlank()) {
+            Arrays.stream(imageFallbackModels.split(","))
+                    .map(String::trim)
+                    .filter(model -> !model.isBlank())
+                    .filter(model -> models.stream().noneMatch(existing -> existing.equalsIgnoreCase(model)))
+                    .forEach(models::add);
+        }
+        return models.isEmpty() ? List.of("qwen3.5-plus") : models;
+    }
+
+    private String callVisionReviewLlm(String prompt, ImageReviewInput imageInput, String model) {
+        if (dashScopeApiKey == null || dashScopeApiKey.isBlank()) {
+            throw new IllegalStateException("spring.ai.dashscope.api-key is empty");
+        }
+        String dataUrl = "data:" + imageInput.mimeType() + ";base64,"
+                + Base64.getEncoder().encodeToString(imageInput.bytes());
+        Map<String, Object> payload = Map.of(
+                "model", model,
+                "temperature", 0,
+                "messages", List.of(Map.of(
+                        "role", "user",
+                        "content", List.of(
+                                Map.of(
+                                        "type", "image_url",
+                                        "image_url", Map.of("url", dataUrl)
+                                ),
+                                Map.of(
+                                        "type", "text",
+                                        "text", prompt
+                                )
+                        )
+                ))
+        );
+        String requestBody = GsonUtils.toJson(payload);
+        log.info("ReviewAgent 调用视觉模型, model={}, imageBytes={}, mimeType={}",
+                model, imageInput.bytes().length, imageInput.mimeType());
+        Request request = new Request.Builder()
+                .url(visionEndpoint)
+                .addHeader("Authorization", "Bearer " + dashScopeApiKey)
+                .addHeader("Content-Type", "application/json")
+                .post(RequestBody.create(requestBody, okhttp3.MediaType.parse("application/json; charset=utf-8")))
+                .build();
+        try (Response response = httpClient.newCall(request).execute()) {
+            String body = response.body() != null ? response.body().string() : "";
+            if (!response.isSuccessful()) {
+                throw new IllegalStateException("HTTP " + response.code() + " - " + body);
+            }
+            return extractVisionResponseText(body);
+        } catch (IOException e) {
+            throw new IllegalStateException("call DashScope vision review failed", e);
+        }
+    }
+
+    private String extractVisionResponseText(String body) {
+        JsonObject root = GsonUtils.fromJson(body, JsonObject.class);
+        JsonArray choices = root != null ? root.getAsJsonArray("choices") : null;
+        if (choices == null || choices.isEmpty()) {
+            throw new IllegalStateException("DashScope vision response missing choices");
+        }
+        JsonObject choice = choices.get(0).getAsJsonObject();
+        JsonObject message = choice.getAsJsonObject("message");
+        if (message == null || !message.has("content")) {
+            throw new IllegalStateException("DashScope vision response missing message.content");
+        }
+        JsonElement content = message.get("content");
+        if (content.isJsonPrimitive()) {
+            return content.getAsString();
+        }
+        return content.toString();
+    }
+
+    private ImageReviewInput imageReviewInput(ArticleState.ImageResult imageResult) {
         if (imageResult == null || imageResult.getUrl() == null || imageResult.getUrl().isBlank()) {
-            return List.of();
+            return null;
         }
         try {
             URI uri = URI.create(imageResult.getUrl());
             if (!isHttpUrl(uri)) {
                 log.warn("图片评审跳过多模态输入, 非 HTTP 图片 URL: {}", imageResult.getUrl());
-                return List.of();
+                return null;
             }
-            Media media = downloadImageAsMedia(uri);
-            return media == null ? List.of() : List.of(media);
+            return downloadImageForReview(uri);
         } catch (Exception e) {
             log.warn("图片评审无法构建多模态输入, url={}", imageResult.getUrl(), e);
-            return List.of();
+            return null;
         }
     }
 
-    private Media downloadImageAsMedia(URI uri) {
+    private ImageReviewInput downloadImageForReview(URI uri) {
         try {
             URLConnection connection = uri.toURL().openConnection();
             connection.setConnectTimeout(IMAGE_FETCH_CONNECT_TIMEOUT_MS);
@@ -241,15 +346,9 @@ public class ReviewAgent {
             }
 
             MimeType mimeType = resolveImageMimeType(connection.getContentType(), uri);
-            ByteArrayResource resource = new ByteArrayResource(bytes) {
-                @Override
-                public String getFilename() {
-                    return "review-image" + imageExtension(mimeType);
-                }
-            };
-            log.info("图片评审使用本地下载后的图片字节作为多模态输入, size={} bytes, mimeType={}, url={}",
+            log.info("图片评审使用下载后的图片字节构造 base64 多模态输入, size={} bytes, mimeType={}, url={}",
                     bytes.length, mimeType, uri);
-            return new Media(mimeType, resource);
+            return new ImageReviewInput(bytes, mimeType.toString());
         } catch (Exception e) {
             log.warn("图片评审下载图片失败，降级为纯文本评审, url={}, reason={}", uri, e.getMessage());
             return null;
@@ -330,53 +429,12 @@ public class ReviewAgent {
         return false;
     }
 
-    private String getStyleName(String style) {
-        ArticleStyleEnum styleEnum = ArticleStyleEnum.getEnumByValue(style);
-        return styleEnum != null ? styleEnum.getText() : "默认风格";
+    private String getStyleName(String platform, String style) {
+        return skillService.resolve(platform, style).getDisplayName();
     }
 
-    private String styleRubric(String style) {
-        ArticleStyleEnum styleEnum = ArticleStyleEnum.getEnumByValue(style);
-        if (styleEnum == null) {
-            return """
-                    - 目标读者匹配 15：是否符合常见新媒体文章读者预期。
-                    - 内容价值 10：是否提供观点、信息或启发。
-                    - 表达一致 10：语气是否稳定，不突兀切换。
-                    - 阅读动力 10：是否能让读者持续读完。
-                    """;
-        }
-        return switch (styleEnum) {
-            case MARKETING -> """
-                    - 转化路径 15：是否从痛点到方案到行动引导形成闭环。
-                    - 卖点清晰 10：核心利益、差异化和适用人群是否明确。
-                    - 信任感 10：是否有合理证据、场景、案例或风险说明支撑。
-                    - 行动引导 10：CTA 是否自然、具体，不过度硬广。
-                    """;
-            case EDUCATIONAL -> """
-                    - 知识准确性 15：概念、因果和结论是否严谨，不能把推测写成事实。
-                    - 解释能力 10：是否深入浅出，有定义、例子或类比。
-                    - 逻辑递进 10：是否从基础到进阶，读者能跟上。
-                    - 边界意识 10：是否说明适用范围、不确定性或必要前提。
-                    """;
-            case EMOTIONAL -> """
-                    - 共鸣强度 15：是否触达具体情绪和真实处境。
-                    - 叙事感染力 10：是否有细节、节奏和画面感。
-                    - 情绪克制 10：避免空泛鸡汤、过度煽情或价值绑架。
-                    - 观点落点 10：是否有清晰启发、陪伴感或情绪出口。
-                    """;
-            case TECH -> """
-                    - 专业严谨 15：术语、架构、趋势判断是否可信。
-                    - 信息密度 10：是否有技术细节、场景和取舍。
-                    - 客观分析 10：避免营销化空话和无依据结论。
-                    - 实践价值 10：是否能给出方法、方案或工程启发。
-                    """;
-            case HUMOROUS -> """
-                    - 趣味性 15：是否有轻松表达、节奏和记忆点。
-                    - 信息不失真 10：幽默不牺牲主题和事实。
-                    - 分寸感 10：不冒犯、不低俗、不喧宾夺主。
-                    - 可读性 10：梗和表达自然，不堆砌。
-                    """;
-        };
+    private String styleRubric(String platform, String style) {
+        return skillService.resolve(platform, style).getReviewRubric();
     }
 
     private String titleRubric() {
@@ -398,7 +456,7 @@ public class ReviewAgent {
     private String buildContentProfile(String stageName, ArticleState state, String content) {
         StringBuilder sb = new StringBuilder();
         sb.append("- 阶段：").append(stageName).append("\n");
-        sb.append("- 文章风格：").append(getStyleName(state.getStyle())).append("\n");
+        sb.append("- 写作 Skill：").append(getStyleName(state.getPlatform(), state.getStyle())).append("\n");
         sb.append("- 字数范围：").append(nullToEmpty(state.getWordRange())).append("\n");
         sb.append("- 待评审内容字符数：").append(content == null ? 0 : content.length()).append("\n");
 
@@ -461,5 +519,8 @@ public class ReviewAgent {
 
     private record ImagePlanReviewPayload(String contentWithPlaceholders,
                                           List<ArticleState.ImageRequirement> imageRequirements) {
+    }
+
+    private record ImageReviewInput(byte[] bytes, String mimeType) {
     }
 }

@@ -11,6 +11,7 @@ public enum StructuredOutputTypeEnum {
     TITLE_OPTIONS("title_options", "title_options.schema.json", RootType.ARRAY),
     OUTLINE_RESULT("outline_result", "outline_result.schema.json", RootType.OBJECT),
     IMAGE_PLAN("image_plan", "image_plan.schema.json", RootType.OBJECT),
+    OUTLINE_IMAGE_PLAN("outline_image_plan", "outline_image_plan.schema.json", RootType.OBJECT),
     REVIEW_RESULT("review_result", "review_result.schema.json", RootType.OBJECT),
     IMAGE_REVIEW_RESULT("image_review_result", "image_review_result.schema.json", RootType.OBJECT);
 

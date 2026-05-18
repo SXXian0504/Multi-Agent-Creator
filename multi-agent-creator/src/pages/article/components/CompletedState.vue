@@ -10,14 +10,14 @@
       <p class="article-subtitle">{{ article.subTitle }}</p>
     </div>
     <div class="content-preview">
-      <div v-html="markdownToHtml(article.fullContent || article.content || '')" class="markdown-body"></div>
+      <div v-html="articleMarkdownToHtml(article.fullContent || article.content || '', article.images)" class="markdown-body"></div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { CheckCircleFilled } from '@ant-design/icons-vue'
-import { markdownToHtml } from '@/utils/markdown'
+import { articleMarkdownToHtml } from '@/utils/markdown'
 
 defineProps<{
   article: Partial<API.ArticleVO>
@@ -92,12 +92,50 @@ defineProps<{
     text-indent: 2em;
   }
 
+  :deep(p:has(> img)) {
+    text-indent: 0;
+    margin: 28px 0;
+  }
+
   :deep(img) {
     display: block;
     max-width: 100%;
+    max-height: 600px;
+    width: auto;
+    height: auto;
     margin: 20px auto;
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-md);
+    object-fit: contain;
+  }
+
+  :deep(img[src$=".svg"]) {
+    width: min(100%, 760px);
+    max-width: 100%;
+    max-height: 430px;
+    padding: 12px;
+    box-sizing: border-box;
+    background: #ffffff;
+    border: 1px solid var(--color-border-light);
+    box-shadow: var(--shadow-sm);
+    object-fit: contain;
+  }
+
+  :deep(.article-cover-paragraph) {
+    margin: 18px 0 28px;
+    text-align: center;
+  }
+
+  :deep(img.article-cover-image) {
+    width: auto !important;
+    max-width: min(100%, 720px) !important;
+    max-height: 360px !important;
+    padding: 12px;
+    box-sizing: border-box;
+    background: #ffffff;
+    border: 1px solid var(--color-border-light);
+    box-shadow: var(--shadow-sm);
+    object-fit: contain;
   }
 }
 </style>

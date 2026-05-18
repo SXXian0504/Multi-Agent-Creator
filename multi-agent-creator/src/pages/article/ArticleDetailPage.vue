@@ -153,7 +153,7 @@
               <FileTextOutlined class="section-icon" />
               完整图文
             </h2>
-            <div v-html="markdownToHtml(article.fullContent)" class="markdown-content"></div>
+            <div v-html="markdownToHtml(article.fullContent, article.images)" class="markdown-content"></div>
           </div>
 
           <!-- 普通正文（无 fullContent 时展示） -->
@@ -162,7 +162,7 @@
               <FileTextOutlined class="section-icon" />
               文章正文
             </h2>
-            <div v-html="markdownToHtml(article.content)" class="markdown-content"></div>
+            <div v-html="markdownToHtml(article.content, article.images)" class="markdown-content"></div>
           </div>
 
           <!-- 配图（仅在没有 fullContent 时单独展示） -->
@@ -205,7 +205,7 @@ import {
   ThunderboltOutlined
 } from '@ant-design/icons-vue'
 import { getArticle, getExecutionLogs } from '@/api/articleController'
-import { marked } from 'marked'
+import { articleMarkdownToHtml } from '@/utils/markdown'
 import dayjs from 'dayjs'
 
 const router = useRouter()
@@ -218,8 +218,8 @@ const logsLoading = ref(false)
 const showExecutionLogs = ref(false)
 
 // Markdown 转 HTML
-const markdownToHtml = (markdown: string) => {
-  return marked(markdown)
+const markdownToHtml = (markdown: string | undefined, images?: API.ImageItem[]) => {
+  return articleMarkdownToHtml(markdown, images)
 }
 
 // 加载文章
@@ -826,6 +826,11 @@ onMounted(() => {
         color: var(--color-text);
       }
 
+      :deep(p:has(> img)) {
+        text-indent: 0;
+        margin: 28px 0;
+      }
+
       :deep(ul), :deep(ol) {
         margin-bottom: 14px;
         padding-left: 2em;
@@ -850,8 +855,32 @@ onMounted(() => {
 
       // Mermaid 图表特殊处理（SVG 格式）
       :deep(img[src$=".svg"]) {
-        max-width: 800px;
-        max-height: 500px;
+        width: min(100%, 760px);
+        max-width: 100%;
+        max-height: 430px;
+        padding: 12px;
+        box-sizing: border-box;
+        background: #ffffff;
+        border: 1px solid var(--color-border-light);
+        box-shadow: var(--shadow-sm);
+        object-fit: contain;
+      }
+
+      :deep(.article-cover-paragraph) {
+        margin: 18px 0 28px;
+        text-align: center;
+      }
+
+      :deep(img.article-cover-image) {
+        width: auto !important;
+        max-width: min(100%, 720px) !important;
+        max-height: 360px !important;
+        padding: 12px;
+        box-sizing: border-box;
+        background: #ffffff;
+        border: 1px solid var(--color-border-light);
+        box-shadow: var(--shadow-sm);
+        object-fit: contain;
       }
     }
   }

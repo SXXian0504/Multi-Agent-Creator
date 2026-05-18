@@ -20,7 +20,17 @@ public class QwenwConfig {
     /**
      * 文生图模型
      */
-    private String model = "qwen-image-plus";
+    private String model = "wanx-v1";
+
+    /**
+     * DashScope async image synthesis endpoint.
+     */
+    private String submitEndpoint = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis";
+
+    /**
+     * DashScope task query endpoint prefix.
+     */
+    private String taskEndpoint = "https://dashscope.aliyuncs.com/api/v1/tasks";
 
     /**
      * 图片宽度
@@ -56,6 +66,11 @@ public class QwenwConfig {
      * 轮询间隔（毫秒）
      */
     private Long pollInterval = 5000L;
+
+    /**
+     * Maximum polling attempts after task submission.
+     */
+    private Integer maxPollAttempts = 24;
 
     /**
      * 获取图片尺寸格式

@@ -3,16 +3,19 @@ package com.sxxian.multiagentcreator.service;
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
 import com.google.gson.reflect.TypeToken;
 import com.sxxian.multiagentcreator.agent.ArticleAgent;
+import com.sxxian.multiagentcreator.agent.ImageAgent;
+import com.sxxian.multiagentcreator.agent.ImageToolExecutor;
 import com.sxxian.multiagentcreator.agent.ReviewAgent;
+import com.sxxian.multiagentcreator.agent.agents.ContentMergerAgent;
 import com.sxxian.multiagentcreator.annotation.AgentExecution;
 import com.sxxian.multiagentcreator.constant.PromptConstant;
 import com.sxxian.multiagentcreator.exception.ReviewRejectedException;
 import com.sxxian.multiagentcreator.model.dto.article.ArticleContext;
 import com.sxxian.multiagentcreator.model.dto.article.ArticleState;
+import com.sxxian.multiagentcreator.model.dto.image.ImageExecutionResult;
 import com.sxxian.multiagentcreator.model.dto.image.ImageRequest;
 import com.sxxian.multiagentcreator.model.dto.review.ImageReviewResult;
 import com.sxxian.multiagentcreator.model.dto.review.ReviewResult;
-import com.sxxian.multiagentcreator.model.enums.ArticleStyleEnum;
 import com.sxxian.multiagentcreator.model.enums.ImageMethodEnum;
 import com.sxxian.multiagentcreator.model.enums.SseMessageTypeEnum;
 import com.sxxian.multiagentcreator.model.enums.StructuredOutputTypeEnum;
@@ -30,8 +33,6 @@ import reactor.core.publisher.Flux;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
-
-import static com.sxxian.multiagentcreator.model.enums.ArticleStyleEnum.HUMOROUS;
 
 @Service
 @Slf4j
@@ -51,6 +52,18 @@ public class ArticleAgentService {
 
     @Resource
     private ReviewAgent reviewAgent;
+
+    @Resource
+    private ImageAgent imageAgent;
+
+    @Resource
+    private ImageToolExecutor imageToolExecutor;
+
+    @Resource
+    private ContentMergerAgent contentMergerAgent;
+
+    @Resource
+    private SkillService skillService;
 
     /**
      * 阶段1：生成标题方案（3-5个）
@@ -114,16 +127,26 @@ public class ArticleAgentService {
 
             // 智能体4：分析配图需求
             log.info("阶段3：开始分析配图需求, taskId={}", state.getTaskId());
-            proxy.agent4AnalyzeImageRequirements(state);
+            imageAgent.planImages(state);
             streamHandler.accept(SseMessageTypeEnum.AGENT4_COMPLETE.getValue());
 
             // 智能体5：生成配图
             log.info("阶段3：开始生成配图, taskId={}", state.getTaskId());
-            proxy.agent5GenerateImages(state, streamHandler);
+            ImageExecutionResult imageExecutionResult = imageToolExecutor.execute(
+                    state.getImageRequirements(), state, streamHandler);
+            state.setImages(imageExecutionResult.getImages());
+            state.getImages().stream()
+                    .filter(image -> image.getPosition() != null && image.getPosition() == 1)
+                    .findFirst()
+                    .ifPresent(image -> state.setCoverImage(image.getUrl()));
+            state.setImageReviewResults(imageExecutionResult.getImageReviewResults());
+            state.setImageExecutionTraces(imageExecutionResult.getTraces());
             streamHandler.accept(SseMessageTypeEnum.AGENT5_COMPLETE.getValue());
 
             // 图文合成：将配图插入正文
             log.info("阶段3：开始图文合成, taskId={}", state.getTaskId());
+            state.setContent(contentMergerAgent.insertPlaceholdersIntoContent(
+                    state.getContent(), state.getImageRequirements()));
             proxy.mergeImagesIntoContent(state);
             streamHandler.accept(SseMessageTypeEnum.MERGE_COMPLETE.getValue());
 
@@ -142,7 +165,7 @@ public class ArticleAgentService {
     public void agent1GenerateTitleOptions(ArticleState state) {
         String prompt = PromptConstant.AGENT1_TITLE_PROMPT
                 .replace("{topic}", state.getTopic())
-                + getStylePrompt(state.getStyle());
+                + skillService.buildPromptInstruction(state.getPlatform(), state.getStyle(), state.getWordRange());
 
         String content = callLlm(prompt);
         List<ArticleState.TitleOption> titleOptions = jsonStructuredOutputService.parse(
@@ -173,7 +196,7 @@ public class ArticleAgentService {
                 .replace("{subTitle}", state.getTitle().getSubTitle())
                 .replace("{descriptionSection}", descriptionSection)
                 + ArticlePromptUtils.getOutlineWordRangePrompt(state.getWordRange(), state.getStyle())
-                + getStylePrompt(state.getStyle());
+                + skillService.buildPromptInstruction(state.getPlatform(), state.getStyle(), state.getWordRange());
 
         String content = callLlmWithStreaming(prompt, streamHandler, SseMessageTypeEnum.AGENT2_STREAMING);
         ArticleState.OutlineResult outlineResult = jsonStructuredOutputService.parse(
@@ -197,7 +220,7 @@ public class ArticleAgentService {
                 .replace("{mainTitle}", state.getTitle().getMainTitle())
                 .replace("{subTitle}", state.getTitle().getSubTitle())
                 .replace("{outline}", outlineText)
-                + getStylePrompt(state.getStyle());
+                + skillService.buildPromptInstruction(state.getPlatform(), state.getStyle(), state.getWordRange());
 
         String content = callLlmWithStreaming(prompt, streamHandler, SseMessageTypeEnum.AGENT3_STREAMING);
         state.setContent(content);
@@ -216,9 +239,15 @@ public class ArticleAgentService {
 
         String prompt = PromptConstant.AGENT4_IMAGE_REQUIREMENTS_PROMPT
                 .replace("{mainTitle}", state.getTitle().getMainTitle())
+                .replace("{style}", skillService.resolve(state.getPlatform(), state.getStyle()).getDisplayName())
+                .replace("{wordRange}", state.getWordRange() == null ? "" : state.getWordRange())
+                .replace("{contentLength}", String.valueOf(state.getContent() == null ? 0 : state.getContent().length()))
                 .replace("{content}", state.getContent())
+                .replace("{imageCountGuide}", "请结合写作 Skill 和文章长度决定配图数量，避免低价值配图。")
                 .replace("{availableMethods}", availableMethods)
-                .replace("{methodUsageGuide}", methodUsageGuide);
+                .replace("{methodUsageGuide}", methodUsageGuide
+                        + "\n写作 Skill 图片建议：\n"
+                        + skillService.resolve(state.getPlatform(), state.getStyle()).getImageGuidance());
 
         ArticleState.Agent4Result agent4Result = generateImagePlan(prompt);
 
@@ -326,6 +355,12 @@ public class ArticleAgentService {
 
         // 遍历所有配图，根据占位符替换为实际图片
         for (ArticleState.ImageResult image : images) {
+            if (image.getPosition() != null && image.getPosition() == 1) {
+                if (image.getUrl() != null && !image.getUrl().isBlank() && !fullContent.contains(image.getUrl())) {
+                    fullContent = "![" + image.getDescription() + "](" + image.getUrl() + ")\n\n" + fullContent;
+                }
+                continue;
+            }
             String placeholder = image.getPlaceholderId();
             if (placeholder != null && !placeholder.isEmpty()) {
                 String imageMarkdown = "![" + image.getDescription() + "](" + image.getUrl() + ")";
@@ -414,8 +449,9 @@ public class ArticleAgentService {
     private String getAllMethodsDescription() {
         return """
                - PEXELS: 适合真实场景、产品照片、人物照片、自然风景等写实图片
-               - NANO_BANANA: 适合创意插画、信息图表、需要文字渲染、抽象概念、艺术风格等 AI 生成图片
-               - MERMAID: 适合流程图、架构图、时序图、关系图、甘特图等结构化图表
+               - QWEN_IMAGE: 适合创意插画、信息图表、需要文字渲染、抽象概念、艺术风格等 AI 生成图片
+               - GRAPHVIZ: 适合流程图、架构图、依赖关系图等结构化图表，优先用于流程图
+               - MERMAID: 适合时序图、甘特图和 Graphviz 不适合的结构化图表
                - ICONIFY: 适合图标、符号、小型装饰性图标（如：箭头、勾选、星星、心形等）
                - EMOJI_PACK: 适合表情包、搞笑图片、轻松幽默的配图
                - SVG_DIAGRAM: 适合概念示意图、思维导图样式、逻辑关系展示（不涉及精确数据）
@@ -428,8 +464,10 @@ public class ArticleAgentService {
     private String getMethodUsageDescription(ImageMethodEnum method) {
         return switch (method) {
             case PEXELS -> "适合真实场景、产品照片、人物照片、自然风景等写实图片";
-            case NANO_BANANA -> "适合创意插画、信息图表、需要文字渲染、抽象概念、艺术风格等 AI 生成图片";
-            case MERMAID -> "适合流程图、架构图、时序图、关系图、甘特图等结构化图表";
+            case QWEN_IMAGE -> "适合创意插画、信息图表、需要文字渲染、抽象概念、艺术风格等 AI 生成图片";
+            case NANO_BANANA -> "旧 Nano Banana AI 生图，当前不作为默认文生图路径";
+            case GRAPHVIZ -> "适合流程图、架构图、依赖关系图等结构化图表，优先用于流程图";
+            case MERMAID -> "适合时序图、甘特图和 Graphviz 不适合的结构化图表";
             case ICONIFY -> "适合图标、符号、小型装饰性图标（如：箭头、勾选、星星、心形等）";
             case EMOJI_PACK -> "适合表情包、搞笑图片、轻松幽默的配图";
             case SVG_DIAGRAM -> "适合概念示意图、思维导图样式、逻辑关系展示（不涉及精确数据）";
@@ -443,7 +481,7 @@ public class ArticleAgentService {
     private String buildMethodUsageGuide(List<String> enabledMethods) {
         // 如果没有限制，返回所有方式的使用指南
         List<String> methodsToInclude = (enabledMethods == null || enabledMethods.isEmpty())
-                ? List.of("PEXELS", "NANO_BANANA", "MERMAID", "ICONIFY", "EMOJI_PACK", "SVG_DIAGRAM")
+                ? List.of("PEXELS", "QWEN_IMAGE", "GRAPHVIZ", "MERMAID", "ICONIFY", "EMOJI_PACK", "SVG_DIAGRAM")
                 : enabledMethods;
 
         StringBuilder sb = new StringBuilder();
@@ -465,10 +503,14 @@ public class ArticleAgentService {
         return switch (method) {
             case "PEXELS" -> """
                     - PEXELS: 提供英文搜索关键词(keywords)，要准确、具体。prompt 留空。""";
+            case "QWEN_IMAGE" -> """
+                    - QWEN_IMAGE: 提供详细的英文或中文生图提示词(prompt)，描述场景、风格、细节。keywords 留空。""";
             case "NANO_BANANA" -> """
-                    - NANO_BANANA: 提供详细的英文生图提示词(prompt)，描述场景、风格、细节。keywords 留空。""";
+                    - NANO_BANANA: 旧 AI 生图路径，除非用户明确选择，否则优先改用 QWEN_IMAGE。提供详细 prompt，keywords 留空。""";
+            case "GRAPHVIZ" -> """
+                    - GRAPHVIZ: 在 prompt 字段生成完整 Graphviz DOT 代码。必须以 digraph/graph 开头；只输出 DOT，不要 markdown fence 或解释文字；流程图、架构图优先用 digraph + rankdir=LR；节点标签用双引号，长中文标签用 \\n 拆行；节点数量控制在 8 个以内，避免巨大留白；keywords 留空。""";
             case "MERMAID" -> """
-                    - MERMAID: 在 prompt 字段生成完整的 Mermaid 代码（如流程图、架构图）。keywords 留空。""";
+                    - MERMAID: 在 prompt 字段生成完整 Mermaid 代码。Graphviz 不可用或需要时序图/甘特图时使用；keywords 留空。""";
             case "ICONIFY" -> """
                     - ICONIFY: 提供英文图标关键词(keywords)，如：check、arrow、star、heart。prompt 留空。""";
             case "EMOJI_PACK" -> """
@@ -522,31 +564,6 @@ public class ArticleAgentService {
         }
 
         return validatedRequirements;
-    }
-
-    /**
-     * 根据风格获取对应的 Prompt 附加内容
-     *
-     * @param style 文章风格
-     * @return 风格对应的 Prompt 附加内容，如果无风格则返回空字符串
-     */
-    private String getStylePrompt(String style) {
-        if (style == null || style.isEmpty()) {
-            return "";
-        }
-
-        ArticleStyleEnum styleEnum = ArticleStyleEnum.getEnumByValue(style);
-        if (styleEnum == null) {
-            return "";
-        }
-
-        return switch (styleEnum) {
-            case TECH -> PromptConstant.STYLE_TECH_PROMPT;
-            case EMOTIONAL -> PromptConstant.STYLE_EMOTIONAL_PROMPT;
-            case EDUCATIONAL -> PromptConstant.STYLE_EDUCATIONAL_PROMPT;
-            case HUMOROUS -> PromptConstant.STYLE_HUMOROUS_PROMPT;
-            case MARKETING -> PromptConstant.STYLE_MARKETING_PROMPT;
-        };
     }
 
     /**

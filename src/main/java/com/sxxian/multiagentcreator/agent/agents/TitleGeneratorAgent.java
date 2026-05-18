@@ -6,7 +6,7 @@ import com.alibaba.cloud.ai.graph.action.NodeAction;
 import com.google.gson.reflect.TypeToken;
 import com.sxxian.multiagentcreator.constant.PromptConstant;
 import com.sxxian.multiagentcreator.model.dto.article.ArticleState;
-import com.sxxian.multiagentcreator.model.enums.ArticleStyleEnum;
+import com.sxxian.multiagentcreator.service.SkillService;
 import com.sxxian.multiagentcreator.utils.GsonUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,8 +28,10 @@ import java.util.Map;
 public class TitleGeneratorAgent implements NodeAction {
 
     private final DashScopeChatModel chatModel;
+    private final SkillService skillService;
 
     public static final String INPUT_TOPIC = "topic";
+    public static final String INPUT_PLATFORM = "platform";
     public static final String INPUT_STYLE = "style";
     public static final String OUTPUT_TITLE_OPTIONS = "titleOptions";
 
@@ -42,13 +44,16 @@ public class TitleGeneratorAgent implements NodeAction {
         String style = state.value(INPUT_STYLE)
                 .map(Object::toString)
                 .orElse(null);
+        String platform = state.value(INPUT_PLATFORM)
+                .map(Object::toString)
+                .orElse(null);
 
         log.info("TitleGeneratorAgent 开始执行: topic={}, style={}", topic, style);
 
         // 构建 prompt
         String prompt = PromptConstant.AGENT1_TITLE_PROMPT
                 .replace("{topic}", topic)
-                + getStylePrompt(style);
+                + skillService.buildPromptInstruction(platform, style, null);
 
         // 调用 LLM
         ChatResponse response = chatModel.call(new Prompt(new UserMessage(prompt)));
@@ -65,25 +70,4 @@ public class TitleGeneratorAgent implements NodeAction {
         return Map.of(OUTPUT_TITLE_OPTIONS, titleOptions);
     }
 
-    /**
-     * 根据风格获取对应的 Prompt 附加内容
-     */
-    private String getStylePrompt(String style) {
-        if (style == null || style.isEmpty()) {
-            return "";
-        }
-
-        ArticleStyleEnum styleEnum = ArticleStyleEnum.getEnumByValue(style);
-        if (styleEnum == null) {
-            return "";
-        }
-
-        return switch (styleEnum) {
-            case TECH -> PromptConstant.STYLE_TECH_PROMPT;
-            case EMOTIONAL -> PromptConstant.STYLE_EMOTIONAL_PROMPT;
-            case EDUCATIONAL -> PromptConstant.STYLE_EDUCATIONAL_PROMPT;
-            case HUMOROUS -> PromptConstant.STYLE_HUMOROUS_PROMPT;
-            case MARKETING -> PromptConstant.STYLE_MARKETING_PROMPT;
-        };
-    }
 }

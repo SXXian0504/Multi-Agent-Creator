@@ -7,8 +7,8 @@ import com.alibaba.cloud.ai.graph.action.NodeAction;
 import com.sxxian.multiagentcreator.agent.context.StreamHandlerContext;
 import com.sxxian.multiagentcreator.constant.PromptConstant;
 import com.sxxian.multiagentcreator.model.dto.article.ArticleState;
-import com.sxxian.multiagentcreator.model.enums.ArticleStyleEnum;
 import com.sxxian.multiagentcreator.model.enums.SseMessageTypeEnum;
+import com.sxxian.multiagentcreator.service.SkillService;
 import com.sxxian.multiagentcreator.utils.GsonUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,10 +31,12 @@ import java.util.function.Consumer;
 public class ContentGeneratorAgent implements NodeAction {
 
     private final DashScopeChatModel chatModel;
+    private final SkillService skillService;
 
     public static final String INPUT_MAIN_TITLE = "mainTitle";
     public static final String INPUT_SUB_TITLE = "subTitle";
     public static final String INPUT_OUTLINE = "outline";
+    public static final String INPUT_PLATFORM = "platform";
     public static final String INPUT_STYLE = "style";
     public static final String OUTPUT_CONTENT = "content";
 
@@ -61,6 +63,9 @@ public class ContentGeneratorAgent implements NodeAction {
         String style = state.value(INPUT_STYLE)
                 .map(Object::toString)
                 .orElse(null);
+        String platform = state.value(INPUT_PLATFORM)
+                .map(Object::toString)
+                .orElse(null);
 
         log.info("ContentGeneratorAgent 开始执行: mainTitle={}", mainTitle);
 
@@ -70,7 +75,7 @@ public class ContentGeneratorAgent implements NodeAction {
                 .replace("{mainTitle}", mainTitle)
                 .replace("{subTitle}", subTitle)
                 .replace("{outline}", outlineText)
-                + getStylePrompt(style);
+                + skillService.buildPromptInstruction(platform, style, null);
 
         // 获取流式处理器
         Consumer<String> streamHandler = StreamHandlerContext.get();
@@ -108,25 +113,4 @@ public class ContentGeneratorAgent implements NodeAction {
         return contentBuilder.toString();
     }
 
-    /**
-     * 根据风格获取对应的 Prompt 附加内容
-     */
-    private String getStylePrompt(String style) {
-        if (style == null || style.isEmpty()) {
-            return "";
-        }
-
-        ArticleStyleEnum styleEnum = ArticleStyleEnum.getEnumByValue(style);
-        if (styleEnum == null) {
-            return "";
-        }
-
-        return switch (styleEnum) {
-            case TECH -> PromptConstant.STYLE_TECH_PROMPT;
-            case EMOTIONAL -> PromptConstant.STYLE_EMOTIONAL_PROMPT;
-            case EDUCATIONAL -> PromptConstant.STYLE_EDUCATIONAL_PROMPT;
-            case HUMOROUS -> PromptConstant.STYLE_HUMOROUS_PROMPT;
-            case MARKETING -> PromptConstant.STYLE_MARKETING_PROMPT;
-        };
-    }
 }

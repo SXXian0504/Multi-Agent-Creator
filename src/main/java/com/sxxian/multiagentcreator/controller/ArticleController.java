@@ -12,12 +12,12 @@ import com.sxxian.multiagentcreator.exception.ThrowUtils;
 import com.sxxian.multiagentcreator.manager.SseEmitterManager;
 import com.sxxian.multiagentcreator.model.dto.article.*;
 import com.sxxian.multiagentcreator.model.entity.User;
-import com.sxxian.multiagentcreator.model.enums.ArticleStyleEnum;
 import com.sxxian.multiagentcreator.model.vo.AgentExecutionStats;
 import com.sxxian.multiagentcreator.model.vo.ArticleVO;
 import com.sxxian.multiagentcreator.service.AgentLogService;
 import com.sxxian.multiagentcreator.service.ArticleAsyncService;
 import com.sxxian.multiagentcreator.service.ArticleService;
+import com.sxxian.multiagentcreator.service.SkillService;
 import com.sxxian.multiagentcreator.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.extern.slf4j.Slf4j;
@@ -50,6 +50,9 @@ public class ArticleController {
     @Resource
     private AgentLogService agentLogService;
 
+    @Resource
+    private SkillService skillService;
+
     /**
      * 创建文章任务
      */
@@ -59,8 +62,10 @@ public class ArticleController {
         ThrowUtils.throwIf(request == null, ErrorCode.PARAMS_ERROR);
         ThrowUtils.throwIf(request.getTopic() == null || request.getTopic().trim().isEmpty(),
                 ErrorCode.PARAMS_ERROR, "选题不能为空");
-        // 校验风格参数（允许为空）
-        ThrowUtils.throwIf(!ArticleStyleEnum.isValid(request.getStyle()),
+        // 校验平台和风格参数（允许为空）
+        ThrowUtils.throwIf(!skillService.validatePlatform(request.getPlatform()),
+                ErrorCode.PARAMS_ERROR, "无效的发布平台");
+        ThrowUtils.throwIf(!skillService.validateContentStyle(request.getStyle()),
                 ErrorCode.PARAMS_ERROR, "无效的文章风格");
         ThrowUtils.throwIf(!isValidWordRange(request.getWordRange()),
                 ErrorCode.PARAMS_ERROR, "无效的字数范围");
@@ -70,6 +75,7 @@ public class ArticleController {
         // 检查并消耗配额 + 创建文章任务（在同一事务中）
         String taskId = articleService.createArticleTaskWithQuotaCheck(
                 request.getTopic(),
+                request.getPlatform(),
                 request.getStyle(),
                 request.getWordRange(),
                 request.getEnabledImageMethods(),
@@ -80,11 +86,21 @@ public class ArticleController {
         articleAsyncService.executePhase1(
                 taskId,
                 request.getTopic(),
+                request.getPlatform(),
                 request.getStyle(),
                 request.getWordRange()
         );
 
         return ResultUtils.success(taskId);
+    }
+
+    /**
+     * 获取写作 Skill 选项
+     */
+    @GetMapping("/writing-skills")
+    @Operation(summary = "获取写作 Skill 选项")
+    public BaseResponse<com.sxxian.multiagentcreator.model.dto.skill.WritingSkillOptions> getWritingSkills() {
+        return ResultUtils.success(skillService.listWritingSkills());
     }
 
     private boolean isValidWordRange(String wordRange) {

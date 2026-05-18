@@ -141,8 +141,14 @@ public interface PromptConstant {
             
             根据以下文章内容,分析配图需求,并在正文中插入图片占位符:
             主标题：{mainTitle}
+            文章风格：{style}
+            字数范围：{wordRange}
+            正文长度：{contentLength}
             正文：
             {content}
+
+            【配图数量策略】
+            {imageCountGuide}
             
             【重要】可用的配图方式（请严格只从以下方式中选择，禁止使用未列出的方式）：
             {availableMethods}
@@ -152,7 +158,7 @@ public interface PromptConstant {
             
             通用要求:
             1. 识别需要配图的位置(封面、关键章节、段落之间等)
-            2. 根据文章内容和结构灵活决定配图数量，避免过多或过少
+            2. 根据文章内容和结构灵活决定配图数量，严格遵守【配图数量策略】，避免为了凑数量插入低价值图片
             3. **在正文中插入占位符**：使用以下两种格式
                - 普通图片占位符：{{IMAGE_PLACEHOLDER_N}}，其中 N 为配图序号（1, 2, 3...），必须独占一行
                - Icon 占位符：{{ICON_PLACEHOLDER_N}}，可以放在文字行内任意位置（用于 ICONIFY 类型）
@@ -161,6 +167,7 @@ public interface PromptConstant {
             4. **imageSource 字段必须且只能是上述可用配图方式之一，不要使用其他值**
             5. placeholderId 必须与正文中插入的占位符完全一致
             6. position=1 为封面图
+            7. 每个 imageRequirement 必须填写 reason，说明为什么在该位置配图、为什么选择该 imageSource、为什么使用该 keywords 或 prompt
             
             请直接返回 JSON 格式,不要有其他内容:
             {
@@ -170,7 +177,8 @@ public interface PromptConstant {
                   "position": 1,
                   "type": "cover",
                   "sectionTitle": "",
-                  "imageSource": "NANO_BANANA",
+                  "imageSource": "QWEN_IMAGE",
+                  "reason": "封面图用于概括全文主题，AI 生成图更适合表达抽象科技概念",
                   "keywords": "",
                   "prompt": "A modern minimalist illustration of AI technology concept, featuring abstract neural network patterns with blue and purple gradient colors, clean design suitable for article cover, 16:9 aspect ratio",
                   "placeholderId": ""
@@ -180,6 +188,7 @@ public interface PromptConstant {
                   "type": "section",
                   "sectionTitle": "章节标题1",
                   "imageSource": "PEXELS",
+                  "reason": "该章节需要真实工作场景支撑，图库检索更适合获得自然照片",
                   "keywords": "business success teamwork office",
                   "prompt": "",
                   "placeholderId": "{{IMAGE_PLACEHOLDER_1}}"
@@ -189,6 +198,7 @@ public interface PromptConstant {
                   "type": "inline",
                   "sectionTitle": "",
                   "imageSource": "ICONIFY",
+                  "reason": "该位置只需要轻量符号强化列表含义，图标比完整配图更克制",
                   "keywords": "check circle",
                   "prompt": "",
                   "placeholderId": "{{ICON_PLACEHOLDER_1}}"
@@ -198,12 +208,104 @@ public interface PromptConstant {
                   "type": "section",
                   "sectionTitle": "章节标题2",
                   "imageSource": "MERMAID",
+                  "reason": "该章节解释流程关系，Mermaid 适合表达结构化步骤",
                   "keywords": "",
                   "prompt": "flowchart TB\\n    A[用户请求] --> B[负载均衡]\\n    B --> C[应用服务器]",
                   "placeholderId": "{{IMAGE_PLACEHOLDER_2}}"
                 }
               ]
             }
+            """;
+
+    String AGENT4_OUTLINE_IMAGE_REQUIREMENTS_PROMPT = """
+            你是 ImageAgent，负责在正文尚未生成时，基于用户主题、标题和已确认大纲提前规划配图。
+
+            任务上下文：
+            主题：{topic}
+            主标题：{mainTitle}
+            副标题：{subTitle}
+            用户补充描述：{userDescription}
+            文章风格：{style}
+            字数范围：{wordRange}
+            大纲：
+            {outline}
+
+            【配图数量策略】
+            {imageCountGuide}
+
+            【可用配图方式】
+            {availableMethods}
+
+            各配图方式的使用要求：
+            {methodUsageGuide}
+
+            要求：
+            1. 正文还没有生成，只规划视觉方向、图片类型、章节归属和工具参数，不要输出 contentWithPlaceholders。
+            2. position=1 必须是封面图，placeholderId 为空。
+            3. 非封面图必须尽量绑定到大纲中的 sectionTitle，placeholderId 可以填写 {{IMAGE_PLACEHOLDER_N}} 或 {{ICON_PLACEHOLDER_N}}，但不要假设正文已包含它。
+            4. 严格遵守配图数量策略，不要为了凑数量添加低价值图片；短文或营销文可以只有封面图。
+            5. imageSource 必须从可用配图方式中选择。
+            6. 每个 imageRequirement 必须填写 reason，说明为什么在该位置配图、为什么选择该 imageSource、为什么使用该 keywords 或 prompt。
+
+            请直接返回 JSON，不要输出其他内容：
+            {
+              "imageRequirements": [
+                {
+                  "position": 1,
+                  "type": "cover",
+                  "sectionTitle": "",
+                  "imageSource": "QWEN_IMAGE",
+                  "reason": "封面图用于概括全文主题，AI 生成更适合表达抽象视觉方向",
+                  "keywords": "",
+                  "prompt": "A clean editorial cover image for the article topic, 16:9 aspect ratio",
+                  "placeholderId": ""
+                },
+                {
+                  "position": 2,
+                  "type": "section",
+                  "sectionTitle": "大纲章节标题",
+                  "imageSource": "PEXELS",
+                  "reason": "该章节需要真实场景支撑，图库检索更适合获得自然照片",
+                  "keywords": "business teamwork office",
+                  "prompt": "",
+                  "placeholderId": "{{IMAGE_PLACEHOLDER_1}}"
+                }
+              ]
+            }
+            """;
+
+    String IMAGE_REPLAN_PROMPT = """
+            你是 ImageAgent，负责基于图片评审 observation 对单张图片重新规划。
+
+            任务上下文：
+            主题：{topic}
+            主标题：{mainTitle}
+            章节：{sectionTitle}
+            可用配图方式：
+            {availableMethods}
+
+            原始配图需求：
+            {imageRequirement}
+
+            上一轮工具结果：
+            {imageResult}
+
+            图片评审 observation：
+            {observation}
+
+            修订建议：
+            {revisionAdvice}
+
+            要求：
+            1. 只重写这一张图片的配图需求，不要改其他图片。
+            2. 如果是 Mermaid/SVG 渲染失败，优先修复 prompt 中的图表代码或图表描述。
+            3. 如果是 Graphviz 渲染失败，优先切换为 MERMAID 并生成等价 Mermaid 代码；如果是 Mermaid 渲染失败，优先切换为 GRAPHVIZ 并生成等价 DOT 代码。
+            4. 如果是相关性低，优先改 keywords 或 prompt；必要时才切换 imageSource。
+            5. imageSource 必须从可用配图方式中选择。
+            6. 必须填写 reason，说明本轮重规划的依据。
+            7. 返回 JSON 对象，字段与 ImageRequirement 完全一致。
+
+            请直接返回 JSON，不要输出其他内容。
             """;
 
     // region 文章风格 Prompt

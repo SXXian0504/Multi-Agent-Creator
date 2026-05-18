@@ -127,3 +127,11 @@ export async function getProgress(
     ...(options || {}),
   })
 }
+
+/** 获取写作 Skill 选项 GET /article/writing-skills */
+export async function getWritingSkills(options?: { [key: string]: any }) {
+  return request<API.BaseResponseWritingSkillOptions>('/article/writing-skills', {
+    method: 'GET',
+    ...(options || {}),
+  })
+}

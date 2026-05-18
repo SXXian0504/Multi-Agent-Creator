@@ -46,6 +46,7 @@ declare namespace API {
 
   type ArticleCreateRequest = {
     topic?: string
+    platform?: string
     style?: string
     wordRange?: string
     enabledImageMethods?: string[]
@@ -65,6 +66,7 @@ declare namespace API {
     taskId?: string
     userId?: number
     topic?: string
+    platform?: string
     userDescription?: string
     mainTitle?: string
     subTitle?: string
@@ -108,6 +110,31 @@ declare namespace API {
   type BaseResponseListPaymentRecord = {
     code?: number
     data?: PaymentRecord[]
+    message?: string
+  }
+
+  type WritingSkillConfig = {
+    id?: string
+    type?: string
+    label?: string
+    description?: string
+    enabled?: boolean
+    sort?: number
+    promptInstruction?: string
+    reviewRubric?: string
+    imageGuidance?: string
+    wordRangeGuidance?: Record<string, string>
+    constraints?: string[]
+  }
+
+  type WritingSkillOptions = {
+    platforms?: WritingSkillConfig[]
+    contentStyles?: WritingSkillConfig[]
+  }
+
+  type BaseResponseWritingSkillOptions = {
+    code?: number
+    data?: WritingSkillOptions
     message?: string
   }
 
@@ -196,6 +223,7 @@ declare namespace API {
     keywords?: string
     sectionTitle?: string
     description?: string
+    placeholderId?: string
   }
 
   type LoginUserVO = {

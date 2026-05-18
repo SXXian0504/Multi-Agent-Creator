@@ -34,6 +34,11 @@ public class ArticleVO implements Serializable {
     private String topic;
 
     /**
+     * 发布平台
+     */
+    private String platform;
+
+    /**
      * 用户补充描述
      */
     private String userDescription;
@@ -138,6 +143,7 @@ public class ArticleVO implements Serializable {
         private String keywords;
         private String sectionTitle;
         private String description;
+        private String placeholderId;
     }
 
     /**

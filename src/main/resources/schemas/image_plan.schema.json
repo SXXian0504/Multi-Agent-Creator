@@ -13,7 +13,7 @@
       "minItems": 1,
       "items": {
         "type": "object",
-        "required": ["position", "type", "imageSource", "keywords", "prompt", "placeholderId"],
+        "required": ["position", "type", "imageSource", "reason", "keywords", "prompt", "placeholderId"],
         "properties": {
           "position": {
             "type": "integer",
@@ -28,7 +28,11 @@
           },
           "imageSource": {
             "type": "string",
-            "enum": ["PEXELS", "NANO_BANANA", "MERMAID", "ICONIFY", "EMOJI_PACK", "SVG_DIAGRAM", "QWEN_IMAGE", "PICSUM"]
+            "enum": ["PEXELS", "NANO_BANANA", "MERMAID", "GRAPHVIZ", "ICONIFY", "EMOJI_PACK", "SVG_DIAGRAM", "QWEN_IMAGE", "PICSUM"]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
           },
           "keywords": {
             "type": "string"

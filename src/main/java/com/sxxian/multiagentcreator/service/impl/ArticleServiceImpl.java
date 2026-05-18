@@ -50,11 +50,11 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
     private ArticleAgentService articleAgentService;
 
     @Override
-    public String createArticleTask(String topic, String style, String wordRange, List<String> enabledImageMethods, User loginUser) {
+    public String createArticleTask(String topic, String platform, String style, String wordRange, List<String> enabledImageMethods, User loginUser) {
         // 处理配图方式：如果用户未选择，给普通用户设置默认的非 VIP 方式
         List<String> finalImageMethods = processImageMethods(enabledImageMethods, loginUser);
 
-        // 校验配图方式权限（普通用户不能使用 NANO_BANANA 和 SVG_DIAGRAM）
+        // 校验配图方式权限（普通用户不能使用 AI 生图和 SVG_DIAGRAM）
         validateImageMethods(finalImageMethods, loginUser);
 
         // 生成任务ID
@@ -65,6 +65,7 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
         article.setTaskId(taskId);
         article.setUserId(loginUser.getId());
         article.setTopic(topic);
+        article.setPlatform(platform);
         article.setStyle(style);
         article.setWordRange(wordRange);
         article.setEnabledImageMethods(finalImageMethods != null && !finalImageMethods.isEmpty()
@@ -75,18 +76,18 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
 
         this.save(article);
 
-        log.info("文章任务已创建, taskId={}, userId={}, style={}, wordRange={}",
-                taskId, loginUser.getId(), style, wordRange);
+        log.info("文章任务已创建, taskId={}, userId={}, platform={}, style={}, wordRange={}",
+                taskId, loginUser.getId(), platform, style, wordRange);
         return taskId;
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public String createArticleTaskWithQuotaCheck(String topic, String style, String wordRange, List<String> enabledImageMethods, User loginUser) {
+    public String createArticleTaskWithQuotaCheck(String topic, String platform, String style, String wordRange, List<String> enabledImageMethods, User loginUser) {
         // 在同一事务中：先扣配额，再创建任务
         // 如果任务创建失败，配额会自动回滚
         quotaService.checkAndConsumeQuota(loginUser);
-        return createArticleTask(topic, style, wordRange, enabledImageMethods, loginUser);
+        return createArticleTask(topic, platform, style, wordRange, enabledImageMethods, loginUser);
     }
 
     @Override
@@ -360,6 +361,7 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
         // 普通用户：返回默认的非 VIP 方式
         return List.of(
                 ImageMethodEnum.PEXELS.getValue(),
+                ImageMethodEnum.GRAPHVIZ.getValue(),
                 ImageMethodEnum.MERMAID.getValue(),
                 ImageMethodEnum.ICONIFY.getValue(),
                 ImageMethodEnum.EMOJI_PACK.getValue()
@@ -368,7 +370,7 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
 
     /**
      * 校验配图方式权限
-     * 普通用户不能使用 NANO_BANANA 和 SVG_DIAGRAM
+     * 普通用户不能使用 QWEN_IMAGE/NANO_BANANA 和 SVG_DIAGRAM
      */
     private void validateImageMethods(List<String> enabledImageMethods, User loginUser) {
         if (enabledImageMethods == null || enabledImageMethods.isEmpty()) {
@@ -382,7 +384,8 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
 
         // 普通用户限制
         for (String method : enabledImageMethods) {
-            if (ImageMethodEnum.NANO_BANANA.getValue().equals(method) ||
+            if (ImageMethodEnum.QWEN_IMAGE.getValue().equals(method) ||
+                    ImageMethodEnum.NANO_BANANA.getValue().equals(method) ||
                     ImageMethodEnum.SVG_DIAGRAM.getValue().equals(method)) {
                 throw new BusinessException(ErrorCode.NO_AUTH_ERROR,
                         "高级配图功能（AI 生图、SVG 图表）仅限 VIP 会员使用");

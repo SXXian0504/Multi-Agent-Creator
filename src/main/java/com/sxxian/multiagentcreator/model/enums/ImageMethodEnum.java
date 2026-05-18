@@ -30,6 +30,11 @@ public enum ImageMethodEnum {
     MERMAID("MERMAID", "Mermaid 流程图生成", true, false),
 
     /**
+     * Graphviz DOT 流程图生成
+     */
+    GRAPHVIZ("GRAPHVIZ", "Graphviz DOT 流程图生成", true, false),
+
+    /**
      * Iconify 图标库检索
      */
     ICONIFY("ICONIFY", "Iconify 图标库", false, false),
@@ -47,7 +52,7 @@ public enum ImageMethodEnum {
     /**
      * 千问文生图（DashScope AI 生图）
      */
-    QWEN_IMAGE("QWEN_IMAGE", "千问文生图", true, false),
+    QWEN_IMAGE("QWEN_IMAGE", "百炼文生图（wanx-v1）", true, false),
 
     /**
      * Picsum 随机图片（降级方案）
@@ -118,7 +123,7 @@ public enum ImageMethodEnum {
      * 获取默认的 AI 生图方式
      */
     public static ImageMethodEnum getDefaultAiMethod() {
-        return NANO_BANANA;
+        return QWEN_IMAGE;
     }
 
     /**

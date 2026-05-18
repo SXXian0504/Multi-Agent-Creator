@@ -1,37 +1,24 @@
 package com.sxxian.multiagentcreator.agent;
 
-import com.alibaba.cloud.ai.graph.*;
-import com.alibaba.cloud.ai.graph.exception.GraphStateException;
-import com.alibaba.cloud.ai.graph.state.strategy.ReplaceStrategy;
-import com.sxxian.multiagentcreator.annotation.AgentExecution;
-import com.sxxian.multiagentcreator.agent.agents.*;
+import com.sxxian.multiagentcreator.agent.agents.ContentMergerAgent;
 import com.sxxian.multiagentcreator.agent.config.AgentConfig;
 import com.sxxian.multiagentcreator.agent.context.StreamHandlerContext;
-import com.sxxian.multiagentcreator.agent.parallel.ParallelImageGenerator;
+import com.sxxian.multiagentcreator.annotation.AgentExecution;
 import com.sxxian.multiagentcreator.exception.ReviewRejectedException;
+import com.sxxian.multiagentcreator.model.dto.article.ArticleContext;
 import com.sxxian.multiagentcreator.model.dto.article.ArticleState;
+import com.sxxian.multiagentcreator.model.dto.image.ImageExecutionResult;
 import com.sxxian.multiagentcreator.model.enums.SseMessageTypeEnum;
-import com.sxxian.multiagentcreator.utils.GsonUtils;
-import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.util.HashMap;
+import jakarta.annotation.Resource;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.function.Consumer;
 
-import static com.alibaba.cloud.ai.graph.StateGraph.END;
-import static com.alibaba.cloud.ai.graph.StateGraph.START;
-import static com.alibaba.cloud.ai.graph.action.AsyncNodeAction.node_async;
-
-/**
- * 文章智能体编排器
- * 使用 Spring AI Alibaba 的 StateGraph 编排多个 Agent
- *
- * @author AI Passage Creator
- */
 @Service
 @Slf4j
 public class ArticleAgentOrchestrator {
@@ -43,351 +30,189 @@ public class ArticleAgentOrchestrator {
     private ArticleAgent articleAgent;
 
     @Resource
-    private ImageAnalyzerAgent imageAnalyzerAgent;
+    private ImageAgent imageAgent;
 
     @Resource
-    private ParallelImageGenerator parallelImageGenerator;
+    private ImageToolExecutor imageToolExecutor;
 
     @Resource
     private ContentMergerAgent contentMergerAgent;
 
-    // region 状态键常量
-
-    private static final String KEY_TASK_ID = "taskId";
-    private static final String KEY_TOPIC = "topic";
-    private static final String KEY_STYLE = "style";
-    private static final String KEY_WORD_RANGE = "wordRange";
-    private static final String KEY_USER_DESCRIPTION = "userDescription";
-    private static final String KEY_MAIN_TITLE = "mainTitle";
-    private static final String KEY_SUB_TITLE = "subTitle";
-    private static final String KEY_TITLE_OPTIONS = "titleOptions";
-    private static final String KEY_TITLE_REVIEW_RESULT = "titleReviewResult";
-    private static final String KEY_OUTLINE = "outline";
-    private static final String KEY_OUTLINE_REVIEW_RESULT = "outlineReviewResult";
-    private static final String KEY_CONTENT = "content";
-    private static final String KEY_CONTENT_REVIEW_RESULT = "contentReviewResult";
-    private static final String KEY_CONTENT_WITH_PLACEHOLDERS = "contentWithPlaceholders";
-    private static final String KEY_IMAGE_REQUIREMENTS = "imageRequirements";
-    private static final String KEY_IMAGE_PLAN_REVIEW_RESULT = "imagePlanReviewResult";
-    private static final String KEY_IMAGES = "images";
-    private static final String KEY_IMAGE_REVIEW_RESULTS = "imageReviewResults";
-    private static final String KEY_FULL_CONTENT = "fullContent";
-    private static final String KEY_ENABLED_IMAGE_METHODS = "enabledImageMethods";
-
-    // endregion
-
-    /**
-     * 阶段1：生成标题方案
-     *
-     * @param state         文章状态
-     * @param streamHandler 流式输出处理器
-     */
-    @AgentExecution(value = "orchestrator_phase1_generate_titles", description = "编排模式生成标题方案", phase = "TITLE_GENERATING")
+    @AgentExecution(value = "orchestrator_phase1_generate_titles", description = "orchestrator generate title options", phase = "TITLE_GENERATING")
     public void executePhase1_GenerateTitles(ArticleState state, Consumer<String> streamHandler) {
-        log.info("阶段1（多智能体编排）：开始生成标题方案, taskId={}", state.getTaskId());
-
         try {
-            // 构建输入状态
-            Map<String, Object> inputs = new HashMap<>();
-            inputs.put(KEY_TASK_ID, state.getTaskId());
-            inputs.put(KEY_TOPIC, state.getTopic());
-            inputs.put(KEY_STYLE, state.getStyle());
-            inputs.put(KEY_WORD_RANGE, state.getWordRange());
-
-            // 构建并执行图
-            StateGraph graph = buildPhase1Graph();
-            CompiledGraph compiledGraph = graph.compile();
-
-            Optional<OverAllState> result = compiledGraph.invoke(inputs);
-
-            if (result.isPresent()) {
-                OverAllState finalState = result.get();
-
-                @SuppressWarnings("unchecked")
-                List<ArticleState.TitleOption> titleOptions = finalState.value(KEY_TITLE_OPTIONS)
-                        .map(v -> (List<ArticleState.TitleOption>) v)
-                        .orElse(null);
-
-                if (titleOptions != null) {
-                    state.setTitleOptions(titleOptions);
-                    finalState.value(KEY_TITLE_REVIEW_RESULT)
-                            .ifPresent(v -> state.setTitleReviewResult(
-                                    GsonUtils.fromJson(GsonUtils.toJson(v),
-                                            com.sxxian.multiagentcreator.model.dto.review.ReviewResult.class)));
-                    streamHandler.accept(SseMessageTypeEnum.AGENT1_COMPLETE.getValue());
-                    log.info("阶段1（多智能体编排）：标题方案生成完成, 数量={}", titleOptions.size());
-                } else {
-                    throw new RuntimeException("标题方案生成失败：结果为空");
-                }
-            } else {
-                throw new RuntimeException("标题方案生成失败：执行结果为空");
-            }
-
+            ArticleContext context = ArticleContext.fromState(state);
+            articleAgent.generateTitles(context).applyToState(state);
+            streamHandler.accept(SseMessageTypeEnum.AGENT1_COMPLETE.getValue());
+            log.info("orchestrator phase1 completed, taskId={}, titleCount={}",
+                    state.getTaskId(), state.getTitleOptions() == null ? 0 : state.getTitleOptions().size());
         } catch (Exception e) {
             rethrowReviewRejected(e);
-            log.error("阶段1（多智能体编排）：标题方案生成失败, taskId={}", state.getTaskId(), e);
-            throw new RuntimeException("标题方案生成失败: " + e.getMessage(), e);
+            log.error("orchestrator phase1 failed, taskId={}", state.getTaskId(), e);
+            throw new RuntimeException("title generation failed: " + e.getMessage(), e);
         }
     }
 
-    /**
-     * 阶段2：生成大纲
-     *
-     * @param state         文章状态
-     * @param streamHandler 流式输出处理器
-     */
-    @AgentExecution(value = "orchestrator_phase2_generate_outline", description = "编排模式生成文章大纲", phase = "OUTLINE_GENERATING")
+    @AgentExecution(value = "orchestrator_phase2_generate_outline", description = "orchestrator generate outline", phase = "OUTLINE_GENERATING")
     public void executePhase2_GenerateOutline(ArticleState state, Consumer<String> streamHandler) {
-        log.info("阶段2（多智能体编排）：开始生成大纲, taskId={}", state.getTaskId());
-
-        // 设置流式处理器到 ThreadLocal
         StreamHandlerContext.set(streamHandler);
-
         try {
-            // 构建输入状态
-            Map<String, Object> inputs = new HashMap<>();
-            inputs.put(KEY_TASK_ID, state.getTaskId());
-            inputs.put(KEY_TOPIC, state.getTopic());
-            inputs.put(KEY_MAIN_TITLE, state.getTitle().getMainTitle());
-            inputs.put(KEY_SUB_TITLE, state.getTitle().getSubTitle());
-            inputs.put(KEY_USER_DESCRIPTION, state.getUserDescription());
-            inputs.put(KEY_STYLE, state.getStyle());
-            inputs.put(KEY_WORD_RANGE, state.getWordRange());
-
-            // 构建并执行图
-            StateGraph graph = buildPhase2Graph();
-            CompiledGraph compiledGraph = graph.compile();
-
-            Optional<OverAllState> result = compiledGraph.invoke(inputs);
-
-            if (result.isPresent()) {
-                OverAllState finalState = result.get();
-
-                ArticleState.OutlineResult outline = finalState.value(KEY_OUTLINE)
-                        .map(v -> {
-                            if (v instanceof ArticleState.OutlineResult) {
-                                return (ArticleState.OutlineResult) v;
-                            }
-                            return null;
-                        })
-                        .orElse(null);
-
-                if (outline != null) {
-                    state.setOutline(outline);
-                    finalState.value(KEY_OUTLINE_REVIEW_RESULT)
-                            .ifPresent(v -> state.setOutlineReviewResult(
-                                    GsonUtils.fromJson(GsonUtils.toJson(v),
-                                            com.sxxian.multiagentcreator.model.dto.review.ReviewResult.class)));
-                    streamHandler.accept(SseMessageTypeEnum.AGENT2_COMPLETE.getValue());
-                    log.info("阶段2（多智能体编排）：大纲生成完成, 章节数={}", outline.getSections().size());
-                } else {
-                    throw new RuntimeException("大纲生成失败：结果为空");
-                }
-            } else {
-                throw new RuntimeException("大纲生成失败：执行结果为空");
-            }
-
+            ArticleContext context = ArticleContext.fromState(state);
+            articleAgent.generateOutline(context, streamHandler).applyToState(state);
+            streamHandler.accept(SseMessageTypeEnum.AGENT2_COMPLETE.getValue());
+            log.info("orchestrator phase2 completed, taskId={}, sectionCount={}",
+                    state.getTaskId(),
+                    state.getOutline() == null || state.getOutline().getSections() == null
+                            ? 0 : state.getOutline().getSections().size());
         } catch (Exception e) {
             rethrowReviewRejected(e);
-            log.error("阶段2（多智能体编排）：大纲生成失败, taskId={}", state.getTaskId(), e);
-            throw new RuntimeException("大纲生成失败: " + e.getMessage(), e);
+            log.error("orchestrator phase2 failed, taskId={}", state.getTaskId(), e);
+            throw new RuntimeException("outline generation failed: " + e.getMessage(), e);
         } finally {
-            // 清理 ThreadLocal
             StreamHandlerContext.clear();
         }
     }
 
-    /**
-     * 阶段3：生成正文+配图
-     *
-     * @param state         文章状态
-     * @param streamHandler 流式输出处理器
-     */
-    @AgentExecution(value = "orchestrator_phase3_generate_content", description = "编排模式生成正文和配图", phase = "CONTENT_GENERATING")
+    @AgentExecution(value = "orchestrator_phase3_generate_content", description = "orchestrator generate content and images in parallel", phase = "CONTENT_GENERATING")
     public void executePhase3_GenerateContent(ArticleState state, Consumer<String> streamHandler) {
-        log.info("阶段3（多智能体编排）：开始生成正文+配图, taskId={}", state.getTaskId());
-
-        // 设置流式处理器到 ThreadLocal
         StreamHandlerContext.set(streamHandler);
-
         try {
-            // 构建输入状态（不再包含 streamHandler，避免序列化问题）
-            Map<String, Object> inputs = new HashMap<>();
-            inputs.put(KEY_TASK_ID, state.getTaskId());
-            inputs.put(KEY_TOPIC, state.getTopic());
-            inputs.put(KEY_MAIN_TITLE, state.getTitle().getMainTitle());
-            inputs.put(KEY_SUB_TITLE, state.getTitle().getSubTitle());
-            inputs.put(KEY_OUTLINE, state.getOutline());
-            inputs.put(KEY_STYLE, state.getStyle());
-            inputs.put(KEY_WORD_RANGE, state.getWordRange());
-            inputs.put(KEY_USER_DESCRIPTION, state.getUserDescription());
-            inputs.put(KEY_ENABLED_IMAGE_METHODS, state.getEnabledImageMethods());
-
-            // 构建并执行图
-            StateGraph graph = buildPhase3Graph();
-            CompiledGraph compiledGraph = graph.compile();
-
-            Optional<OverAllState> result = compiledGraph.invoke(inputs);
-
-            if (result.isPresent()) {
-                OverAllState finalState = result.get();
-
-                // 提取带占位符的正文（优先使用，如果存在）
-                String contentWithPlaceholders = finalState.value(KEY_CONTENT_WITH_PLACEHOLDERS)
-                        .map(Object::toString)
-                        .orElse(null);
-
-                // 提取原始正文（作为备用）
-                String content = finalState.value(KEY_CONTENT)
-                        .map(Object::toString)
-                        .orElse(null);
-
-                // 提取配图需求
-                @SuppressWarnings("unchecked")
-                List<ArticleState.ImageRequirement> imageRequirements = finalState.value(KEY_IMAGE_REQUIREMENTS)
-                        .map(v -> (List<ArticleState.ImageRequirement>) v)
-                        .orElse(null);
-
-                // 提取图片结果
-                @SuppressWarnings("unchecked")
-                List<ArticleState.ImageResult> images = finalState.value(KEY_IMAGES)
-                        .map(v -> (List<ArticleState.ImageResult>) v)
-                        .orElse(null);
-
-                // 提取完整内容
-                String fullContent = finalState.value(KEY_FULL_CONTENT)
-                        .map(Object::toString)
-                        .orElse(null);
-
-                // 更新状态（使用带占位符的正文）
-                if (contentWithPlaceholders != null) {
-                    state.setContent(contentWithPlaceholders);
-                } else if (content != null) {
-                    state.setContent(content);
-                }
-                finalState.value(KEY_CONTENT_REVIEW_RESULT)
-                        .ifPresent(v -> state.setContentReviewResult(
-                                GsonUtils.fromJson(GsonUtils.toJson(v),
-                                        com.sxxian.multiagentcreator.model.dto.review.ReviewResult.class)));
-                streamHandler.accept(SseMessageTypeEnum.AGENT3_COMPLETE.getValue());
-
-                if (imageRequirements != null) {
-                    state.setImageRequirements(imageRequirements);
-                    finalState.value(KEY_IMAGE_PLAN_REVIEW_RESULT)
-                            .ifPresent(v -> state.setImagePlanReviewResult(
-                                    GsonUtils.fromJson(GsonUtils.toJson(v),
-                                            com.sxxian.multiagentcreator.model.dto.review.ReviewResult.class)));
-                    streamHandler.accept(SseMessageTypeEnum.AGENT4_COMPLETE.getValue());
-                }
-
-                if (images != null) {
-                    state.setImages(images);
-                    finalState.value(KEY_IMAGE_REVIEW_RESULTS)
-                            .ifPresent(v -> state.setImageReviewResults(
-                                    GsonUtils.fromJson(GsonUtils.toJson(v),
-                                            new com.google.gson.reflect.TypeToken<List<com.sxxian.multiagentcreator.model.dto.review.ImageReviewResult>>() {}.getType())));
-                    streamHandler.accept(SseMessageTypeEnum.AGENT5_COMPLETE.getValue());
-                }
-
-                if (fullContent != null) {
-                    state.setFullContent(fullContent);
-                    streamHandler.accept(SseMessageTypeEnum.MERGE_COMPLETE.getValue());
-                }
-
-                log.info("阶段3（多智能体编排）：正文+配图生成完成, 正文长度={}, 图片数={}",
-                        contentWithPlaceholders != null ? contentWithPlaceholders.length() : (content != null ? content.length() : 0),
-                        images != null ? images.size() : 0);
-
-            } else {
-                throw new RuntimeException("正文+配图生成失败：执行结果为空");
-            }
-
+            executePhase3ParallelFromOutline(state, streamHandler);
         } catch (Exception e) {
             rethrowReviewRejected(e);
-            log.error("阶段3（多智能体编排）：正文+配图生成失败, taskId={}", state.getTaskId(), e);
-            throw new RuntimeException("正文+配图生成失败: " + e.getMessage(), e);
+            log.error("orchestrator phase3 failed, taskId={}", state.getTaskId(), e);
+            throw new RuntimeException("content and image generation failed: " + e.getMessage(), e);
         } finally {
-            // 清理 ThreadLocal
             StreamHandlerContext.clear();
         }
     }
 
-    // region 构建图
+    private void executePhase3ParallelFromOutline(ArticleState state, Consumer<String> streamHandler) {
+        ArticleState imageState = copyImagePlanningState(state);
 
-    /**
-     * 构建阶段1图：标题生成
-     */
-    private StateGraph buildPhase1Graph() throws GraphStateException {
-        KeyStrategyFactory keyStrategyFactory = createKeyStrategyFactory();
+        CompletableFuture<Void> contentFuture = CompletableFuture.runAsync(() -> {
+            try {
+                ArticleContext context = ArticleContext.fromState(state);
+                articleAgent.generateContent(context, streamHandler).applyToState(state);
+                streamHandler.accept(SseMessageTypeEnum.AGENT3_COMPLETE.getValue());
+            } catch (Exception e) {
+                throw new CompletionException(e);
+            }
+        });
 
-        return new StateGraph(keyStrategyFactory)
-                .addNode("article_generate_titles", node_async(articleAgent::generateTitlesNode))
-                .addEdge(START, "article_generate_titles")
-                .addEdge("article_generate_titles", END);
+        CompletableFuture<ImageExecutionResult> imageFuture = CompletableFuture.supplyAsync(() -> runOutlineImageBranch(imageState, streamHandler));
+
+        contentFuture.join();
+        ImageExecutionResult imageExecutionResult = imageFuture.join();
+
+        state.setImageRequirements(imageState.getImageRequirements());
+        state.setImagePlanReviewResult(imageState.getImagePlanReviewResult());
+        state.setImages(imageExecutionResult.getImages());
+        state.setImageReviewResults(imageExecutionResult.getImageReviewResults());
+        state.setImageExecutionTraces(imageState.getImageExecutionTraces());
+        if (state.getImageExecutionTraces() == null) {
+            state.setImageExecutionTraces(new ArrayList<>());
+        }
+        applyCoverImage(state);
+
+        if (state.getImages() == null || state.getImages().isEmpty()) {
+            runContentImageFallback(state, streamHandler);
+        } else {
+            state.setContent(contentMergerAgent.insertPlaceholdersIntoContent(
+                    state.getContent(), state.getImageRequirements()));
+            streamHandler.accept(SseMessageTypeEnum.AGENT4_COMPLETE.getValue());
+            streamHandler.accept(SseMessageTypeEnum.AGENT5_COMPLETE.getValue());
+            state.setFullContent(contentMergerAgent.mergeImagesIntoContent(state.getContent(), state.getImages()));
+        }
+
+        streamHandler.accept(SseMessageTypeEnum.MERGE_COMPLETE.getValue());
+        log.info("orchestrator phase3 parallel completed, taskId={}, orchestratorEnabled={}, contentLength={}, imageCount={}",
+                state.getTaskId(), agentConfig.isOrchestratorEnabled(),
+                state.getContent() == null ? 0 : state.getContent().length(),
+                state.getImages() == null ? 0 : state.getImages().size());
     }
 
-    /**
-     * 构建阶段2图：大纲生成
-     */
-    private StateGraph buildPhase2Graph() throws GraphStateException {
-        KeyStrategyFactory keyStrategyFactory = createKeyStrategyFactory();
+    private ImageExecutionResult runOutlineImageBranch(ArticleState imageState, Consumer<String> streamHandler) {
+        long startedAt = System.currentTimeMillis();
+        try {
+            ArticleState.Agent4Result plan = imageAgent.planImagesFromOutline(imageState);
+            long endedAt = System.currentTimeMillis();
+            imageState.setImageExecutionTraces(new ArrayList<>(List.of(planTrace("outline", startedAt, endedAt, "PLAN_SUCCEEDED", null))));
+            streamHandler.accept(SseMessageTypeEnum.AGENT4_COMPLETE.getValue());
 
-        return new StateGraph(keyStrategyFactory)
-                .addNode("article_generate_outline", node_async(articleAgent::generateOutlineNode))
-                .addEdge(START, "article_generate_outline")
-                .addEdge("article_generate_outline", END);
+            ImageExecutionResult result = imageToolExecutor.execute(plan.getImageRequirements(), imageState, streamHandler);
+            imageState.getImageExecutionTraces().addAll(result.getTraces());
+            streamHandler.accept(SseMessageTypeEnum.AGENT5_COMPLETE.getValue());
+            return result;
+        } catch (Exception e) {
+            long endedAt = System.currentTimeMillis();
+            imageState.setImageExecutionTraces(new ArrayList<>(List.of(planTrace("outline", startedAt, endedAt, "PLAN_FAILED", e.getMessage()))));
+            log.warn("outline image branch failed, taskId={}, fallbackToContentPlan=true, error={}",
+                    imageState.getTaskId(), e.getMessage(), e);
+            return ImageExecutionResult.builder()
+                    .images(new ArrayList<>())
+                    .imageReviewResults(new ArrayList<>())
+                    .traces(new ArrayList<>())
+                    .fallbackUsed(false)
+                    .build();
+        }
     }
 
-    /**
-     * 构建阶段3图：正文+配图生成（顺序执行）
-     * 流程：正文生成 -> 配图需求分析 -> 并行配图生成 -> 图文合成
-     */
-    private StateGraph buildPhase3Graph() throws GraphStateException {
-        KeyStrategyFactory keyStrategyFactory = createKeyStrategyFactory();
+    private void runContentImageFallback(ArticleState state, Consumer<String> streamHandler) {
+        try {
+            long startedAt = System.currentTimeMillis();
+            ArticleState.Agent4Result plan = imageAgent.planImages(state);
+            long endedAt = System.currentTimeMillis();
+            state.getImageExecutionTraces().add(planTrace("content", startedAt, endedAt, "PLAN_SUCCEEDED", null));
+            streamHandler.accept(SseMessageTypeEnum.AGENT4_COMPLETE.getValue());
 
-        return new StateGraph(keyStrategyFactory)
-                // 节点定义
-                .addNode("article_generate_content", node_async(articleAgent::generateContentNode))
-                .addNode("image_analyzer", node_async(imageAnalyzerAgent))
-                .addNode("parallel_image_generator", node_async(parallelImageGenerator))
-                .addNode("content_merger", node_async(contentMergerAgent))
-                // 边定义：顺序执行
-                .addEdge(START, "article_generate_content")
-                .addEdge("article_generate_content", "image_analyzer")
-                .addEdge("image_analyzer", "parallel_image_generator")
-                .addEdge("parallel_image_generator", "content_merger")
-                .addEdge("content_merger", END);
+            ImageExecutionResult imageExecutionResult = imageToolExecutor.execute(plan.getImageRequirements(), state, streamHandler);
+            state.setImages(imageExecutionResult.getImages());
+            state.setImageReviewResults(imageExecutionResult.getImageReviewResults());
+            state.getImageExecutionTraces().addAll(imageExecutionResult.getTraces());
+            applyCoverImage(state);
+            streamHandler.accept(SseMessageTypeEnum.AGENT5_COMPLETE.getValue());
+            state.setFullContent(contentMergerAgent.mergeImagesIntoContent(state.getContent(), state.getImages()));
+        } catch (Exception e) {
+            state.getImageExecutionTraces().add(planTrace("content", System.currentTimeMillis(), System.currentTimeMillis(), "PLAN_FAILED", e.getMessage()));
+            log.warn("content image fallback failed, keep text only, taskId={}, error={}", state.getTaskId(), e.getMessage(), e);
+            state.setFullContent(state.getContent());
+        }
     }
 
-    /**
-     * 创建状态键策略工厂
-     * 所有键都使用替换策略
-     */
-    private KeyStrategyFactory createKeyStrategyFactory() {
-        return () -> {
-            HashMap<String, KeyStrategy> strategies = new HashMap<>();
-            strategies.put(KEY_TASK_ID, new ReplaceStrategy());
-            strategies.put(KEY_TOPIC, new ReplaceStrategy());
-            strategies.put(KEY_STYLE, new ReplaceStrategy());
-            strategies.put(KEY_WORD_RANGE, new ReplaceStrategy());
-            strategies.put(KEY_USER_DESCRIPTION, new ReplaceStrategy());
-            strategies.put(KEY_MAIN_TITLE, new ReplaceStrategy());
-            strategies.put(KEY_SUB_TITLE, new ReplaceStrategy());
-            strategies.put(KEY_TITLE_OPTIONS, new ReplaceStrategy());
-            strategies.put(KEY_TITLE_REVIEW_RESULT, new ReplaceStrategy());
-            strategies.put(KEY_OUTLINE, new ReplaceStrategy());
-            strategies.put(KEY_OUTLINE_REVIEW_RESULT, new ReplaceStrategy());
-            strategies.put(KEY_CONTENT, new ReplaceStrategy());
-            strategies.put(KEY_CONTENT_REVIEW_RESULT, new ReplaceStrategy());
-            strategies.put(KEY_CONTENT_WITH_PLACEHOLDERS, new ReplaceStrategy());
-            strategies.put(KEY_IMAGE_REQUIREMENTS, new ReplaceStrategy());
-            strategies.put(KEY_IMAGE_PLAN_REVIEW_RESULT, new ReplaceStrategy());
-            strategies.put(KEY_IMAGES, new ReplaceStrategy());
-            strategies.put(KEY_IMAGE_REVIEW_RESULTS, new ReplaceStrategy());
-            strategies.put(KEY_FULL_CONTENT, new ReplaceStrategy());
-            strategies.put(KEY_ENABLED_IMAGE_METHODS, new ReplaceStrategy());
-            return strategies;
-        };
+    private ArticleState copyImagePlanningState(ArticleState source) {
+        ArticleState copy = new ArticleState();
+        copy.setTaskId(source.getTaskId());
+        copy.setTopic(source.getTopic());
+        copy.setPlatform(source.getPlatform());
+        copy.setTitle(source.getTitle());
+        copy.setOutline(source.getOutline());
+        copy.setStyle(source.getStyle());
+        copy.setWordRange(source.getWordRange());
+        copy.setUserDescription(source.getUserDescription());
+        copy.setEnabledImageMethods(source.getEnabledImageMethods());
+        return copy;
+    }
+
+    private ArticleState.ImageExecutionTrace planTrace(String plannedFrom, long startedAt, long endedAt,
+                                                       String status, String observation) {
+        ArticleState.ImageExecutionTrace trace = new ArticleState.ImageExecutionTrace();
+        trace.setPlannedFrom(plannedFrom);
+        trace.setPlanStartedAt(startedAt);
+        trace.setPlanEndedAt(endedAt);
+        trace.setFinalStatus(status);
+        trace.setObservation(observation);
+        return trace;
+    }
+
+    private void applyCoverImage(ArticleState state) {
+        if (state.getImages() == null) {
+            return;
+        }
+        state.getImages().stream()
+                .filter(image -> image.getPosition() != null && image.getPosition() == 1)
+                .findFirst()
+                .ifPresent(image -> state.setCoverImage(image.getUrl()));
     }
 
     private void rethrowReviewRejected(Exception e) {
@@ -399,6 +224,4 @@ public class ArticleAgentOrchestrator {
             current = current.getCause();
         }
     }
-
-    // endregion
 }

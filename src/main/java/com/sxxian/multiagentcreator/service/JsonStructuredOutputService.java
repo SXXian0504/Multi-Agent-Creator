@@ -20,11 +20,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.function.Supplier;
 
-/**
- * 统一处理 LLM 结构化 JSON 输出。
- *
- * <p>MVP 不引入第三方 JSON Schema 校验库，先用根类型、必填字段和业务规则形成稳定闭环。</p>
- */
 @Service
 @Slf4j
 public class JsonStructuredOutputService {
@@ -54,27 +49,22 @@ public class JsonStructuredOutputService {
         int attempt = 0;
         String currentContent = rawContent;
         StructuredOutputException lastError = null;
-
         while (attempt <= Math.max(0, maxRetries)) {
             ParseAttempt<T> result = tryParseOnce(currentContent, targetType, outputType, attempt);
             StructuredOutputTraceContext.add(result.metrics);
-
             if (result.value != null) {
                 return result.value;
             }
-
             lastError = result.error;
             if (retrySupplier == null || attempt >= maxRetries) {
                 break;
             }
-
             attempt++;
-            log.warn("结构化输出解析失败，准备重试原 Agent, outputType={}, retryCount={}, reason={}",
+            log.warn("structured output parse failed, retrying, outputType={}, retryCount={}, reason={}",
                     outputType.getValue(), attempt, lastError.getMessage());
             currentContent = retrySupplier.get();
         }
-
-        throw lastError != null ? lastError : new StructuredOutputException(outputType.getValue() + "解析失败");
+        throw lastError != null ? lastError : new StructuredOutputException(outputType.getValue() + " parse failed");
     }
 
     private <T> ParseAttempt<T> tryParseOnce(String rawContent, Type targetType,
@@ -83,36 +73,29 @@ public class JsonStructuredOutputService {
         boolean parseSuccess = false;
         boolean schemaValid = false;
         boolean businessValid = false;
-        String errorMessage = null;
-
+        String errorMessage;
         try {
             JsonExtraction extraction = extractJson(rawContent, outputType);
             repairCount = extraction.repaired ? 1 : 0;
-
             JsonElement jsonElement = normalizeRoot(JsonParser.parseString(extraction.json), outputType);
             validateRootType(jsonElement, outputType);
             schemaValid = true;
-
             T value = GsonUtils.fromJson(jsonElement.toString(), targetType);
             parseSuccess = true;
-
             validateBusinessRules(value, jsonElement, outputType);
             businessValid = true;
-
-            StructuredOutputMetrics metrics = buildMetrics(
-                    outputType, true, true, true, repairCount, retryCount, null);
-            log.info("结构化输出解析成功, outputType={}, repairCount={}, retryCount={}",
+            StructuredOutputMetrics metrics = buildMetrics(outputType, true, true, true, repairCount, retryCount, null);
+            log.info("structured output parse succeeded, outputType={}, repairCount={}, retryCount={}",
                     outputType.getValue(), repairCount, retryCount);
             return ParseAttempt.success(value, metrics);
         } catch (Exception e) {
             errorMessage = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
             StructuredOutputException error = e instanceof StructuredOutputException structuredOutputException
                     ? structuredOutputException
-                    : new StructuredOutputException(outputType.getValue() + "解析失败: " + errorMessage, e);
-
-            StructuredOutputMetrics metrics = buildMetrics(
-                    outputType, parseSuccess, schemaValid, businessValid, repairCount, retryCount, errorMessage);
-            log.warn("结构化输出解析失败, outputType={}, parseSuccess={}, schemaValid={}, businessValid={}, retryCount={}, error={}",
+                    : new StructuredOutputException(outputType.getValue() + " parse failed: " + errorMessage, e);
+            StructuredOutputMetrics metrics = buildMetrics(outputType, parseSuccess, schemaValid, businessValid,
+                    repairCount, retryCount, errorMessage);
+            log.warn("structured output parse failed, outputType={}, parseSuccess={}, schemaValid={}, businessValid={}, retryCount={}, error={}",
                     outputType.getValue(), parseSuccess, schemaValid, businessValid, retryCount, errorMessage);
             return ParseAttempt.failure(error, metrics);
         }
@@ -120,20 +103,14 @@ public class JsonStructuredOutputService {
 
     private JsonExtraction extractJson(String rawContent, StructuredOutputTypeEnum outputType) {
         if (rawContent == null || rawContent.isBlank()) {
-            throw new StructuredOutputException(outputType.getValue() + "原始输出为空");
+            throw new StructuredOutputException(outputType.getValue() + " content cannot be empty");
         }
-
         String trimmed = rawContent.trim();
         String fenced = stripSingleJsonFence(trimmed);
         if (!fenced.equals(trimmed)) {
             return new JsonExtraction(fenced, true);
         }
-
         String extracted = extractBalancedJson(trimmed, outputType.getRootType());
-        if (extracted == null) {
-            throw new StructuredOutputException(outputType.getValue() + "未找到完整 JSON");
-        }
-
         return new JsonExtraction(extracted, !extracted.equals(trimmed));
     }
 
@@ -141,18 +118,15 @@ public class JsonStructuredOutputService {
         if (!content.startsWith("```")) {
             return content;
         }
-
         int firstLineEnd = content.indexOf('\n');
         int lastFence = content.lastIndexOf("```");
         if (firstLineEnd < 0 || lastFence <= firstLineEnd) {
             return content;
         }
-
         String firstLine = content.substring(0, firstLineEnd).trim();
         if (!"```".equals(firstLine) && !"```json".equalsIgnoreCase(firstLine)) {
             return content;
         }
-
         return content.substring(firstLineEnd + 1, lastFence).trim();
     }
 
@@ -161,22 +135,19 @@ public class JsonStructuredOutputService {
         char close = rootType == StructuredOutputTypeEnum.RootType.ARRAY ? ']' : '}';
         int start = content.indexOf(open);
         if (start < 0) {
-            return null;
+            throw new StructuredOutputException("JSON root not found");
         }
-
-        boolean inString = false;
-        boolean escaped = false;
         int depth = 0;
-
+        boolean inString = false;
+        boolean escape = false;
         for (int i = start; i < content.length(); i++) {
             char current = content.charAt(i);
-
-            if (escaped) {
-                escaped = false;
+            if (escape) {
+                escape = false;
                 continue;
             }
-            if (current == '\\' && inString) {
-                escaped = true;
+            if (current == '\\') {
+                escape = true;
                 continue;
             }
             if (current == '"') {
@@ -186,7 +157,6 @@ public class JsonStructuredOutputService {
             if (inString) {
                 continue;
             }
-
             if (current == open) {
                 depth++;
             } else if (current == close) {
@@ -196,38 +166,20 @@ public class JsonStructuredOutputService {
                 }
             }
         }
-
-        return null;
-    }
-
-    private void validateRootType(JsonElement jsonElement, StructuredOutputTypeEnum outputType) {
-        boolean valid = switch (outputType.getRootType()) {
-            case ARRAY -> jsonElement.isJsonArray();
-            case OBJECT -> jsonElement.isJsonObject();
-        };
-        if (!valid) {
-            throw new StructuredOutputException(outputType.getValue() + "根节点类型不匹配");
-        }
+        throw new StructuredOutputException("balanced JSON root not found");
     }
 
     private JsonElement normalizeRoot(JsonElement jsonElement, StructuredOutputTypeEnum outputType) {
-        if (matchesRootType(jsonElement, outputType)) {
-            return unwrapNamedRoot(jsonElement, outputType);
-        }
-
         JsonElement unwrapped = unwrapNamedRoot(jsonElement, outputType);
         if (matchesRootType(unwrapped, outputType)) {
             return unwrapped;
         }
-
         if (outputType.getRootType() == StructuredOutputTypeEnum.RootType.OBJECT
-                && jsonElement.isJsonArray()
-                && jsonElement.getAsJsonArray().size() == 1
-                && jsonElement.getAsJsonArray().get(0).isJsonObject()) {
-            return jsonElement.getAsJsonArray().get(0);
+                && unwrapped.isJsonArray() && unwrapped.getAsJsonArray().size() == 1
+                && unwrapped.getAsJsonArray().get(0).isJsonObject()) {
+            return unwrapped.getAsJsonArray().get(0);
         }
-
-        return jsonElement;
+        return unwrapped;
     }
 
     private JsonElement unwrapNamedRoot(JsonElement jsonElement, StructuredOutputTypeEnum outputType) {
@@ -245,14 +197,21 @@ public class JsonStructuredOutputService {
         };
     }
 
+    private void validateRootType(JsonElement jsonElement, StructuredOutputTypeEnum outputType) {
+        if (!matchesRootType(jsonElement, outputType)) {
+            throw new StructuredOutputException(outputType.getValue() + " root type is invalid");
+        }
+    }
+
     private void validateBusinessRules(Object value, JsonElement jsonElement, StructuredOutputTypeEnum outputType) {
         switch (outputType) {
             case TITLE_OPTIONS -> validateTitleOptions(value);
             case OUTLINE_RESULT -> validateOutlineResult(value);
             case IMAGE_PLAN -> validateImagePlan(value);
+            case OUTLINE_IMAGE_PLAN -> validateOutlineImagePlan(value);
             case REVIEW_RESULT, IMAGE_REVIEW_RESULT -> {
                 if (!jsonElement.isJsonObject()) {
-                    throw new StructuredOutputException(outputType.getValue() + "必须是 JSON 对象");
+                    throw new StructuredOutputException(outputType.getValue() + " must be a JSON object");
                 }
                 validateReviewResult(value, outputType);
             }
@@ -261,98 +220,94 @@ public class JsonStructuredOutputService {
 
     private void validateReviewResult(Object value, StructuredOutputTypeEnum outputType) {
         if (!(value instanceof ReviewResult reviewResult)) {
-            throw new StructuredOutputException("评审结果结构错误");
+            throw new StructuredOutputException("review result structure is invalid");
         }
         if (reviewResult.getApproved() == null) {
-            throw new StructuredOutputException("评审结果 approved 不能为空");
+            throw new StructuredOutputException("review result approved cannot be empty");
         }
         if (reviewResult.getScore() == null || reviewResult.getScore() < 0 || reviewResult.getScore() > 100) {
-            throw new StructuredOutputException("评审结果 score 必须在 0-100 之间");
+            throw new StructuredOutputException("review result score must be between 0 and 100");
         }
         if (reviewResult.getProblems() == null) {
-            throw new StructuredOutputException("评审结果 problems 不能为空");
+            throw new StructuredOutputException("review result problems cannot be null");
         }
         if (reviewResult.getSuggestions() == null) {
-            throw new StructuredOutputException("评审结果 suggestions 不能为空");
+            throw new StructuredOutputException("review result suggestions cannot be null");
         }
         if (isBlank(reviewResult.getNextAction())) {
-            throw new StructuredOutputException("评审结果 nextAction 不能为空");
+            throw new StructuredOutputException("review result nextAction cannot be empty");
         }
-        if (outputType == StructuredOutputTypeEnum.REVIEW_RESULT) {
-            validateTextReviewDimensionScores(reviewResult);
+        if (outputType == StructuredOutputTypeEnum.IMAGE_REVIEW_RESULT) {
+            return;
         }
-    }
-
-    private void validateTextReviewDimensionScores(ReviewResult reviewResult) {
-        if (reviewResult.getDimensionScores() == null) {
-            throw new StructuredOutputException("文本评审 dimensionScores 不能为空");
+        if (reviewResult.getDimensionScores() == null || reviewResult.getDimensionScores().isEmpty()) {
+            throw new StructuredOutputException("text review dimensionScores cannot be empty");
         }
         Integer commonBaseline = reviewResult.getDimensionScores().get("commonBaseline");
         Integer styleFit = reviewResult.getDimensionScores().get("styleFit");
         Integer stageFit = reviewResult.getDimensionScores().get("stageFit");
         if (commonBaseline == null || styleFit == null || stageFit == null) {
-            throw new StructuredOutputException("文本评审 dimensionScores 必须包含 commonBaseline/styleFit/stageFit");
+            throw new StructuredOutputException("text review dimensionScores must contain commonBaseline/styleFit/stageFit");
         }
-        if (commonBaseline < 0 || commonBaseline > 40
-                || styleFit < 0 || styleFit > 45
-                || stageFit < 0 || stageFit > 15) {
-            throw new StructuredOutputException("文本评审 dimensionScores 分值超出范围");
+        if (commonBaseline < 0 || commonBaseline > 40 || styleFit < 0 || styleFit > 45 || stageFit < 0 || stageFit > 15) {
+            throw new StructuredOutputException("review dimensionScores are out of range");
         }
         int total = commonBaseline + styleFit + stageFit;
         if (reviewResult.getScore() == null || total != reviewResult.getScore()) {
-            throw new StructuredOutputException("文本评审 dimensionScores 之和必须等于 score");
+            log.warn("text review score normalized from dimensionScores, originalScore={}, normalizedScore={}",
+                    reviewResult.getScore(), total);
+            reviewResult.setScore(total);
+            reviewResult.setApproved(total >= 80);
         }
-        if (reviewResult.getScore() < 95
-                && (reviewResult.getProblems().isEmpty() || reviewResult.getSuggestions().isEmpty())) {
-            throw new StructuredOutputException("文本评审 score 低于 95 时 problems/suggestions 不能为空");
+        if (reviewResult.getScore() < 95 && (reviewResult.getProblems().isEmpty() || reviewResult.getSuggestions().isEmpty())) {
+            throw new StructuredOutputException("text review problems/suggestions cannot be empty when score is below 95");
         }
     }
 
     @SuppressWarnings("unchecked")
     private void validateTitleOptions(Object value) {
         if (!(value instanceof List<?> titleOptions)) {
-            throw new StructuredOutputException("标题候选必须是数组");
+            throw new StructuredOutputException("title options must be an array");
         }
         if (titleOptions.size() < 3 || titleOptions.size() > 5) {
-            throw new StructuredOutputException("标题候选数量必须为 3-5 个");
+            throw new StructuredOutputException("title option count must be 3-5");
         }
         for (Object item : titleOptions) {
             if (!(item instanceof ArticleState.TitleOption option)) {
-                throw new StructuredOutputException("标题候选结构错误");
+                throw new StructuredOutputException("title option structure is invalid");
             }
             if (isBlank(option.getMainTitle()) || isBlank(option.getSubTitle())) {
-                throw new StructuredOutputException("标题候选 mainTitle/subTitle 不能为空");
+                throw new StructuredOutputException("title option mainTitle/subTitle cannot be empty");
             }
             if (option.getMainTitle().trim().length() > 30) {
-                throw new StructuredOutputException("标题候选 mainTitle 不能超过 30 字");
+                throw new StructuredOutputException("title option mainTitle must not exceed 30 characters");
             }
         }
     }
 
     private void validateOutlineResult(Object value) {
         if (!(value instanceof ArticleState.OutlineResult outlineResult)) {
-            throw new StructuredOutputException("大纲结构错误");
+            throw new StructuredOutputException("outline structure is invalid");
         }
         List<ArticleState.OutlineSection> sections = outlineResult.getSections();
         if (sections == null || sections.isEmpty()) {
-            throw new StructuredOutputException("大纲 sections 不能为空");
+            throw new StructuredOutputException("outline sections cannot be empty");
         }
-
         for (int i = 0; i < sections.size(); i++) {
             ArticleState.OutlineSection section = sections.get(i);
             int expectedSectionNo = i + 1;
             if (section.getSection() == null || section.getSection() != expectedSectionNo) {
-                throw new StructuredOutputException("大纲章节编号必须从 1 连续递增");
+                throw new StructuredOutputException("outline section numbers must be continuous from 1");
             }
             if (isBlank(section.getTitle())) {
-                throw new StructuredOutputException("大纲章节标题不能为空");
+                throw new StructuredOutputException("outline section title cannot be empty");
             }
             if (section.getPoints() == null || section.getPoints().isEmpty()) {
-                throw new StructuredOutputException("大纲章节 points 不能为空");
+                throw new StructuredOutputException("outline section points cannot be empty");
             }
             for (String point : section.getPoints()) {
                 if (isBlank(point)) {
-                    throw new StructuredOutputException("大纲章节 point 不能为空");
+                    throw new StructuredOutputException("outline section point cannot be empty");
                 }
             }
         }
@@ -360,50 +315,65 @@ public class JsonStructuredOutputService {
 
     private void validateImagePlan(Object value) {
         if (!(value instanceof ArticleState.Agent4Result agent4Result)) {
-            throw new StructuredOutputException("配图计划结构错误");
+            throw new StructuredOutputException("image plan structure is invalid");
         }
         if (isBlank(agent4Result.getContentWithPlaceholders())) {
-            throw new StructuredOutputException("配图计划 contentWithPlaceholders 不能为空");
+            throw new StructuredOutputException("image plan contentWithPlaceholders cannot be empty");
         }
         List<ArticleState.ImageRequirement> requirements = agent4Result.getImageRequirements();
         if (requirements == null || requirements.isEmpty()) {
-            throw new StructuredOutputException("配图计划 imageRequirements 不能为空");
+            throw new StructuredOutputException("image plan imageRequirements cannot be empty");
         }
-
         Set<Integer> positions = new HashSet<>();
         for (ArticleState.ImageRequirement requirement : requirements) {
             validateImageRequirement(requirement, positions, agent4Result.getContentWithPlaceholders());
         }
     }
 
+    private void validateOutlineImagePlan(Object value) {
+        if (!(value instanceof ArticleState.Agent4Result agent4Result)) {
+            throw new StructuredOutputException("outline image plan structure is invalid");
+        }
+        List<ArticleState.ImageRequirement> requirements = agent4Result.getImageRequirements();
+        if (requirements == null || requirements.isEmpty()) {
+            throw new StructuredOutputException("outline image plan imageRequirements cannot be empty");
+        }
+        Set<Integer> positions = new HashSet<>();
+        for (ArticleState.ImageRequirement requirement : requirements) {
+            validateImageRequirement(requirement, positions, null);
+        }
+    }
+
     private void validateImageRequirement(ArticleState.ImageRequirement requirement, Set<Integer> positions,
                                           String contentWithPlaceholders) {
         if (requirement == null) {
-            throw new StructuredOutputException("配图需求不能为空");
+            throw new StructuredOutputException("image requirement cannot be null");
         }
         if (requirement.getPosition() == null || requirement.getPosition() < 1) {
-            throw new StructuredOutputException("配图需求 position 必须大于 0");
+            throw new StructuredOutputException("image requirement position must be greater than 0");
         }
         if (!positions.add(requirement.getPosition())) {
-            throw new StructuredOutputException("配图需求 position 不能重复");
+            throw new StructuredOutputException("image requirement position cannot be duplicated");
         }
         if (isBlank(requirement.getType())) {
-            throw new StructuredOutputException("配图需求 type 不能为空");
+            throw new StructuredOutputException("image requirement type cannot be empty");
+        }
+        if (isBlank(requirement.getReason())) {
+            throw new StructuredOutputException("image requirement reason cannot be empty");
         }
         ImageMethodEnum imageMethod = ImageMethodEnum.getByValue(requirement.getImageSource());
         if (imageMethod == null) {
-            throw new StructuredOutputException("配图需求 imageSource 枚举错误: " + requirement.getImageSource());
+            throw new StructuredOutputException("image requirement imageSource enum is invalid: " + requirement.getImageSource());
         }
-
-        if (requirement.getPosition() > 1 && !isBlank(requirement.getPlaceholderId())
+        if (!isBlank(contentWithPlaceholders) && requirement.getPosition() > 1 && !isBlank(requirement.getPlaceholderId())
                 && !contentWithPlaceholders.contains(requirement.getPlaceholderId())) {
-            throw new StructuredOutputException("配图需求 placeholderId 未出现在正文中: " + requirement.getPlaceholderId());
+            throw new StructuredOutputException("image requirement placeholderId is not present in content: " + requirement.getPlaceholderId());
         }
         if (imageMethod.isAiGenerated() && isBlank(requirement.getPrompt())) {
-            throw new StructuredOutputException("AI 配图方式 prompt 不能为空");
+            throw new StructuredOutputException("AI image method prompt cannot be empty");
         }
         if (!imageMethod.isAiGenerated() && !imageMethod.isFallback() && isBlank(requirement.getKeywords())) {
-            throw new StructuredOutputException("检索型配图方式 keywords 不能为空");
+            throw new StructuredOutputException("search image method keywords cannot be empty");
         }
     }
 
@@ -429,7 +399,6 @@ public class JsonStructuredOutputService {
     }
 
     private record ParseAttempt<T>(T value, StructuredOutputException error, StructuredOutputMetrics metrics) {
-
         private static <T> ParseAttempt<T> success(T value, StructuredOutputMetrics metrics) {
             return new ParseAttempt<>(value, null, metrics);
         }
