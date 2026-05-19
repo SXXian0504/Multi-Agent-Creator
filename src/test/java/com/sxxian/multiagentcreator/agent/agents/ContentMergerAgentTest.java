@@ -60,4 +60,19 @@ class ContentMergerAgentTest {
 
         assertTrue(result.startsWith("![cover](https://example.com/cover.png)\n\n## Section A"));
     }
+
+    @Test
+    void mergeImagesIntoContentReplacesCoverPlaceholderWhenPresent() {
+        String content = "## Section A\n\n{{IMAGE_PLACEHOLDER_1}}\n\nParagraph A.";
+
+        ArticleState.ImageResult cover = new ArticleState.ImageResult();
+        cover.setPosition(1);
+        cover.setUrl("https://example.com/cover.png");
+        cover.setDescription("cover");
+        cover.setPlaceholderId("{{IMAGE_PLACEHOLDER_1}}");
+
+        String result = contentMergerAgent.mergeImagesIntoContent(content, List.of(cover));
+
+        assertEquals("## Section A\n\n![cover](https://example.com/cover.png)\n\nParagraph A.", result);
+    }
 }

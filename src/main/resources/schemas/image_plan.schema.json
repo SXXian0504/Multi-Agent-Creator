@@ -28,7 +28,7 @@
           },
           "imageSource": {
             "type": "string",
-            "enum": ["PEXELS", "NANO_BANANA", "MERMAID", "GRAPHVIZ", "ICONIFY", "EMOJI_PACK", "SVG_DIAGRAM", "QWEN_IMAGE", "PICSUM"]
+            "enum": ["PEXELS", "CHINA_IMAGE_SEARCH", "NANO_BANANA", "MERMAID", "GRAPHVIZ", "ICONIFY", "EMOJI_PACK", "SVG_DIAGRAM", "QWEN_IMAGE", "PICSUM"]
           },
           "reason": {
             "type": "string",

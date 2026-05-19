@@ -48,17 +48,22 @@ export const articleMarkdownToHtml = (
 ): string => {
   let content = markdown || ''
   if (images && images.length > 0) {
-    const coverImage = images.find((image) => image.position === 1 && image.url)
-    if (coverImage?.url && !content.includes(coverImage.url)) {
-      content = `<p class="article-cover-paragraph"><img class="article-cover-image" src="${escapeHtmlAttribute(coverImage.url)}" alt="${escapeHtmlAttribute(safeAlt(coverImage.description))}" /></p>\n\n${content}`
-    }
+    const replacedPlaceholders = new Set<string>()
     images
-      .filter((image) => image.position !== 1 && image.placeholderId && image.url)
+      .filter((image) => image.placeholderId && image.url)
       .forEach((image) => {
         const placeholder = image.placeholderId as string
+        if (content.includes(placeholder)) {
+          replacedPlaceholders.add(placeholder)
+        }
         const imageMarkdown = `![${safeAlt(image.description)}](${image.url})`
         content = content.replace(new RegExp(escapeRegExp(placeholder), 'g'), imageMarkdown)
       })
+    const coverImage = images.find((image) => image.position === 1 && image.url)
+    const coverWasInsertedByPlaceholder = Boolean(coverImage?.placeholderId && replacedPlaceholders.has(coverImage.placeholderId))
+    if (coverImage?.url && !coverWasInsertedByPlaceholder && !content.includes(coverImage.url)) {
+      content = `<p class="article-cover-paragraph"><img class="article-cover-image" src="${escapeHtmlAttribute(coverImage.url)}" alt="${escapeHtmlAttribute(safeAlt(coverImage.description))}" /></p>\n\n${content}`
+    }
   }
   let html = markdownToHtml(content)
   const coverImage = images?.find((image) => image.position === 1 && image.url)

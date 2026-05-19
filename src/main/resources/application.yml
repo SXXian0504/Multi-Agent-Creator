@@ -47,6 +47,12 @@ knife4j:
 ## Pexels API 配置
 #pexels:
 #  api-key: ${PEXELS_API_KEY:xxx}
+## Domestic image search config
+#china-image-search:
+#  search-url: https://cn.bing.com/images/async
+#  suffix: 官方 海报 剧照 角色图
+#  timeout: 10000
+#  max-candidates: 8
 ## Nano Banana (Gemini 原生图片生成) 配置
 #nano-banana:
 #  api-key: xxx  # 请在 https://aistudio.google.com/apikey 获取

@@ -111,12 +111,29 @@ public class ReviewAgent {
                 1
         );
         normalizeApproval(result);
+        normalizeImageRevisionAdvice(result);
         log.info("图片结果评审完成, taskId={}, position={}, score={}, approved={}",
                 state.getTaskId(),
                 imageResult != null ? imageResult.getPosition() : null,
                 result.getScore(),
                 result.getApproved());
         return result;
+    }
+
+    private void normalizeImageRevisionAdvice(ImageReviewResult result) {
+        if (result == null || !isBlank(result.getRevisionAdvice())) {
+            return;
+        }
+        StringBuilder advice = new StringBuilder();
+        if (!isBlank(result.getObservation())) {
+            advice.append("根据图片观察修正：").append(result.getObservation()).append("\n");
+        }
+        appendList(advice, "需要解决的问题", result.getProblems());
+        appendList(advice, "重规划建议", result.getSuggestions());
+        if (!isBlank(result.getNextAction())) {
+            advice.append("建议动作：").append(result.getNextAction()).append("\n");
+        }
+        result.setRevisionAdvice(advice.toString().trim());
     }
 
     public String buildRevisionAdvice(ReviewResult reviewResult) {
@@ -515,6 +532,10 @@ public class ReviewAgent {
 
     private String nullToEmpty(String value) {
         return value == null ? "" : value;
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 
     private record ImagePlanReviewPayload(String contentWithPlaceholders,

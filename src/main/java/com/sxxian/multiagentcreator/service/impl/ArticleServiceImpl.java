@@ -360,6 +360,7 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
 
         // 普通用户：返回默认的非 VIP 方式
         return List.of(
+                ImageMethodEnum.CHINA_IMAGE_SEARCH.getValue(),
                 ImageMethodEnum.PEXELS.getValue(),
                 ImageMethodEnum.GRAPHVIZ.getValue(),
                 ImageMethodEnum.MERMAID.getValue(),

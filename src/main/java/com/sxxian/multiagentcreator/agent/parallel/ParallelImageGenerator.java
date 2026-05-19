@@ -2,9 +2,11 @@ package com.sxxian.multiagentcreator.agent.parallel;
 
 import com.alibaba.cloud.ai.graph.OverAllState;
 import com.alibaba.cloud.ai.graph.action.NodeAction;
+import com.sxxian.multiagentcreator.agent.ImageToolExecutor;
 import com.sxxian.multiagentcreator.agent.context.StreamHandlerContext;
 import com.sxxian.multiagentcreator.agent.ReviewAgent;
 import com.sxxian.multiagentcreator.agent.tools.ImageGenerationTool;
+import com.sxxian.multiagentcreator.model.dto.image.ImageExecutionResult;
 import com.sxxian.multiagentcreator.model.dto.article.ArticleState;
 import com.sxxian.multiagentcreator.model.dto.review.ImageReviewResult;
 import com.sxxian.multiagentcreator.model.enums.SseMessageTypeEnum;
@@ -34,6 +36,7 @@ public class ParallelImageGenerator implements NodeAction {
 
     private final ImageGenerationTool imageGenerationTool;
     private final ReviewAgent reviewAgent;
+    private final ImageToolExecutor imageToolExecutor;
 
     public static final String INPUT_IMAGE_REQUIREMENTS = "imageRequirements";
     public static final String OUTPUT_IMAGES = "images";
@@ -69,21 +72,10 @@ public class ParallelImageGenerator implements NodeAction {
             return Map.of(OUTPUT_IMAGES, new ArrayList<>());
         }
 
-        // 按 imageSource 分组
-        Map<String, List<ArticleState.ImageRequirement>> groupedBySource = imageRequirements.stream()
-                .collect(Collectors.groupingBy(ArticleState.ImageRequirement::getImageSource));
-
-        log.info("配图需求按类型分组: {}",
-                groupedBySource.entrySet().stream()
-                        .collect(Collectors.toMap(
-                                Map.Entry::getKey,
-                                e -> e.getValue().size()
-                        )));
-
-        // 并行执行不同类型的图片生成
         ArticleState reviewState = buildReviewState(state);
-        List<ImageReviewResult> imageReviewResults = new CopyOnWriteArrayList<>();
-        List<ArticleState.ImageResult> allImages = executeParallel(groupedBySource, streamHandler, reviewState, imageReviewResults);
+        ImageExecutionResult executionResult = imageToolExecutor.execute(imageRequirements, reviewState, streamHandler);
+        List<ArticleState.ImageResult> allImages = executionResult.getImages();
+        List<ImageReviewResult> imageReviewResults = executionResult.getImageReviewResults();
 
         // 按 position 排序
         allImages.sort((a, b) -> {
@@ -175,6 +167,15 @@ public class ParallelImageGenerator implements NodeAction {
         state.value("topic").ifPresent(v -> reviewState.setTopic(v.toString()));
         state.value("platform").ifPresent(v -> reviewState.setPlatform(v.toString()));
         state.value("style").ifPresent(v -> reviewState.setStyle(v.toString()));
+        state.value("wordRange").ifPresent(v -> reviewState.setWordRange(v.toString()));
+        state.value("content").ifPresent(v -> reviewState.setContent(v.toString()));
+        state.value("enabledImageMethods").ifPresent(v -> {
+            if (v instanceof List) {
+                @SuppressWarnings("unchecked")
+                List<String> enabledMethods = (List<String>) v;
+                reviewState.setEnabledImageMethods(enabledMethods);
+            }
+        });
         ArticleState.TitleResult title = new ArticleState.TitleResult();
         state.value("mainTitle").ifPresent(v -> title.setMainTitle(v.toString()));
         state.value("subTitle").ifPresent(v -> title.setSubTitle(v.toString()));

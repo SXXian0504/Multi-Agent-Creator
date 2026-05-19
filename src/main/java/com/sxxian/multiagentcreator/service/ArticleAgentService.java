@@ -448,7 +448,8 @@ public class ArticleAgentService {
      */
     private String getAllMethodsDescription() {
         return """
-               - PEXELS: 适合真实场景、产品照片、人物照片、自然风景等写实图片
+               - CHINA_IMAGE_SEARCH: 适合中文影视/动漫/IP角色/明星/品牌/热点事件等具体实体，优先检索国内网站的官方海报、剧照、角色图、新闻图
+               - PEXELS: 适合通用真实场景、产品照片、人物照片、自然风景等写实图片
                - QWEN_IMAGE: 适合创意插画、信息图表、需要文字渲染、抽象概念、艺术风格等 AI 生成图片
                - GRAPHVIZ: 适合流程图、架构图、依赖关系图等结构化图表，优先用于流程图
                - MERMAID: 适合时序图、甘特图和 Graphviz 不适合的结构化图表
@@ -463,7 +464,8 @@ public class ArticleAgentService {
      */
     private String getMethodUsageDescription(ImageMethodEnum method) {
         return switch (method) {
-            case PEXELS -> "适合真实场景、产品照片、人物照片、自然风景等写实图片";
+            case CHINA_IMAGE_SEARCH -> "适合中文影视/动漫/IP角色/明星/品牌/热点事件等具体实体，优先检索国内网站的官方海报、剧照、角色图、新闻图";
+            case PEXELS -> "适合通用真实场景、产品照片、人物照片、自然风景等写实图片";
             case QWEN_IMAGE -> "适合创意插画、信息图表、需要文字渲染、抽象概念、艺术风格等 AI 生成图片";
             case NANO_BANANA -> "旧 Nano Banana AI 生图，当前不作为默认文生图路径";
             case GRAPHVIZ -> "适合流程图、架构图、依赖关系图等结构化图表，优先用于流程图";
@@ -481,7 +483,7 @@ public class ArticleAgentService {
     private String buildMethodUsageGuide(List<String> enabledMethods) {
         // 如果没有限制，返回所有方式的使用指南
         List<String> methodsToInclude = (enabledMethods == null || enabledMethods.isEmpty())
-                ? List.of("PEXELS", "QWEN_IMAGE", "GRAPHVIZ", "MERMAID", "ICONIFY", "EMOJI_PACK", "SVG_DIAGRAM")
+                ? List.of("CHINA_IMAGE_SEARCH", "PEXELS", "QWEN_IMAGE", "GRAPHVIZ", "MERMAID", "ICONIFY", "EMOJI_PACK", "SVG_DIAGRAM")
                 : enabledMethods;
 
         StringBuilder sb = new StringBuilder();
@@ -501,6 +503,8 @@ public class ArticleAgentService {
      */
     private String getMethodDetailedGuide(String method) {
         return switch (method) {
+            case "CHINA_IMAGE_SEARCH" -> """
+                    - CHINA_IMAGE_SEARCH: 提供中文关键词(keywords)，优先包含精确实体名 + 官方海报/剧照/角色图/上映/新闻图等限定词。适用于中文影视、动漫 IP、明星、品牌、热点事件。prompt 留空。""";
             case "PEXELS" -> """
                     - PEXELS: 提供英文搜索关键词(keywords)，要准确、具体。prompt 留空。""";
             case "QWEN_IMAGE" -> """

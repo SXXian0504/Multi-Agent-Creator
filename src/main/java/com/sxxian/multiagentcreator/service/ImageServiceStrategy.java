@@ -148,6 +148,7 @@ public class ImageServiceStrategy {
     private String getFolderForMethod(ImageMethodEnum method) {
         return switch (method) {
             case PEXELS -> "pexels";
+            case CHINA_IMAGE_SEARCH -> "china-image-search";
             case NANO_BANANA -> "nano-banana";
             case MERMAID -> "mermaid";
             case GRAPHVIZ -> "graphviz";

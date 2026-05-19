@@ -99,12 +99,6 @@ public class ContentMergerAgent implements NodeAction {
         String fullContent = content;
 
         for (ArticleState.ImageResult image : images) {
-            if (image.getPosition() != null && image.getPosition() == 1) {
-                fullContent = prependCoverImage(fullContent, image);
-                addMergeTrace(traces, image, "COVER_PREPENDED");
-                continue;
-            }
-
             String placeholder = image.getPlaceholderId();
             log.info("处理图片: position={}, placeholderId={}, url={}",
                     image.getPosition(), placeholder, image.getUrl());
@@ -114,6 +108,12 @@ public class ContentMergerAgent implements NodeAction {
                 fullContent = fullContent.replace(placeholder, imageMarkdown);
                 addMergeTrace(traces, image, "PLACEHOLDER_REPLACED");
                 log.info("成功替换占位符 {}", placeholder);
+                continue;
+            }
+
+            if (image.getPosition() != null && image.getPosition() == 1) {
+                fullContent = prependCoverImage(fullContent, image);
+                addMergeTrace(traces, image, "COVER_PREPENDED");
                 continue;
             }
 

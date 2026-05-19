@@ -429,7 +429,7 @@ public class ImageAgent implements NodeAction {
 
     private String buildAvailableMethodsDescription(List<String> enabledMethods) {
         List<String> methods = enabledMethods == null || enabledMethods.isEmpty()
-                ? List.of("PEXELS", "QWEN_IMAGE", "GRAPHVIZ", "MERMAID", "ICONIFY", "EMOJI_PACK", "SVG_DIAGRAM")
+                ? List.of("CHINA_IMAGE_SEARCH", "PEXELS", "QWEN_IMAGE", "GRAPHVIZ", "MERMAID", "ICONIFY", "EMOJI_PACK", "SVG_DIAGRAM")
                 : enabledMethods;
         StringBuilder sb = new StringBuilder();
         for (String method : methods) {
@@ -444,7 +444,7 @@ public class ImageAgent implements NodeAction {
 
     private String buildMethodUsageGuide(List<String> enabledMethods) {
         List<String> methods = enabledMethods == null || enabledMethods.isEmpty()
-                ? List.of("PEXELS", "QWEN_IMAGE", "GRAPHVIZ", "MERMAID", "ICONIFY", "EMOJI_PACK", "SVG_DIAGRAM")
+                ? List.of("CHINA_IMAGE_SEARCH", "PEXELS", "QWEN_IMAGE", "GRAPHVIZ", "MERMAID", "ICONIFY", "EMOJI_PACK", "SVG_DIAGRAM")
                 : enabledMethods;
         StringBuilder sb = new StringBuilder();
         for (String method : methods) {
@@ -452,6 +452,8 @@ public class ImageAgent implements NodeAction {
             ImageMethodEnum methodEnum = ImageMethodEnum.getByValue(method);
             if (methodEnum == null) {
                 sb.append("Unknown method. Avoid using it.\n");
+            } else if (ImageMethodEnum.CHINA_IMAGE_SEARCH == methodEnum) {
+                sb.append("Use Chinese keywords. Prefer this for Chinese movies, animation/IP characters, celebrities, brands, products, locations, hot topics, official posters, stills, screenshots, or any concrete real-world entity. Include the exact entity name plus words such as official poster, still, character image, release, or scene. Prompt may be empty.\n");
             } else if (ImageMethodEnum.GRAPHVIZ == methodEnum) {
                 sb.append("Use prompt with complete Graphviz DOT code only. Prefer this for flowcharts and architecture diagrams. Use digraph, rankdir=LR, no markdown fence, no prose. Keep labels concise, split long Chinese labels with \\n, avoid more than 8 nodes, avoid huge blank space, and make the diagram readable as an article-width SVG. Keywords may be empty.\n");
             } else if (ImageMethodEnum.MERMAID == methodEnum) {

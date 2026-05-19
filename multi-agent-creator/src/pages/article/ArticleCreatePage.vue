@@ -117,6 +117,7 @@
                   <span class="section-tip">（不选择表示支持所有方式）</span>
                 </div>
                 <a-checkbox-group v-model:value="selectedImageMethods" class="methods-group">
+                  <a-checkbox value="CHINA_IMAGE_SEARCH">国内图库</a-checkbox>
                   <a-checkbox value="PEXELS">Pexels</a-checkbox>
                   <a-tooltip :title="isVip ? '' : '仅限 VIP 会员'">
                     <a-checkbox value="QWEN_IMAGE" :disabled="!isVip">

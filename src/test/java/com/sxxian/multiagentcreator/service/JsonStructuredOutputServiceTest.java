@@ -166,6 +166,35 @@ class JsonStructuredOutputServiceTest {
     }
 
     @Test
+    void imagePlanAcceptsChinaImageSearchWithChineseKeywords() {
+        String raw = """
+                {
+                  "contentWithPlaceholders": "## 标题\\n正文 {{IMAGE_PLACEHOLDER_1}}",
+                  "imageRequirements": [
+                    {
+                      "position": 1,
+                      "type": "cover",
+                      "sectionTitle": "",
+                      "imageSource": "CHINA_IMAGE_SEARCH",
+                      "reason": "主题是中文动画电影，应该检索真实海报和角色图",
+                      "keywords": "罗小黑战记2 官方海报 角色图 上映",
+                      "prompt": "",
+                      "placeholderId": ""
+                    }
+                  ]
+                }
+                """;
+
+        ArticleState.Agent4Result result = service.parse(
+                raw,
+                ArticleState.Agent4Result.class,
+                StructuredOutputTypeEnum.IMAGE_PLAN
+        );
+
+        assertEquals("CHINA_IMAGE_SEARCH", result.getImageRequirements().get(0).getImageSource());
+    }
+
+    @Test
     void rejectsOutlineImagePlanWithoutReason() {
         String raw = """
                 {

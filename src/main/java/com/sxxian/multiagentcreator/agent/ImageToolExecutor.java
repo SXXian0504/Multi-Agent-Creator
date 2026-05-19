@@ -132,6 +132,7 @@ public class ImageToolExecutor implements NodeAction {
             ImageReviewResult reviewResult = reviewAgent.reviewImageResult(reviewState, current, imageResult);
             applyReviewTrace(trace, reviewResult);
             traces.add(trace);
+            reviewResults.add(reviewResult);
 
             if (bestReview == null || reviewResult.getScore() != null
                     && (bestReview.getScore() == null || reviewResult.getScore() > bestReview.getScore())) {
@@ -141,12 +142,15 @@ public class ImageToolExecutor implements NodeAction {
 
             if (reviewResult.isApprovedByThreshold()) {
                 images.add(imageResult);
-                reviewResults.add(reviewResult);
                 pushImageComplete(streamHandler, imageResult);
                 trace.setFinalStatus("APPROVED");
+                log.info("图片评审通过，使用当前配图: taskId={}, position={}, attempt={}, score={}",
+                        reviewState.getTaskId(), current.getPosition(), attempt, reviewResult.getScore());
                 return fallbackUsed;
             }
 
+            log.info("图片评审未通过，准备重规划: taskId={}, position={}, attempt={}, score={}, nextAction={}",
+                    reviewState.getTaskId(), current.getPosition(), attempt, reviewResult.getScore(), reviewResult.getNextAction());
             current = replanAfterReview(current, reviewState, imageResult, reviewResult, attempt);
             if (current == null) {
                 break;
@@ -155,12 +159,15 @@ public class ImageToolExecutor implements NodeAction {
 
         if (bestImage != null) {
             images.add(bestImage);
-            if (bestReview != null) {
-                reviewResults.add(bestReview);
-            }
             pushImageComplete(streamHandler, bestImage);
-            markLastTrace(traces, initialRequirement.getPosition(), "BEST_AVAILABLE");
-            return fallbackUsed;
+            log.warn("图片重试后仍未通过评审，使用评审分最高的候选图: taskId={}, position={}, bestScore={}, maxReviewRetries={}, url={}",
+                    reviewState.getTaskId(),
+                    initialRequirement.getPosition(),
+                    bestReview != null ? bestReview.getScore() : null,
+                    MAX_REPLAN_ATTEMPTS,
+                    bestImage.getUrl());
+            markTraceForImage(traces, bestImage, "BEST_EFFORT_AFTER_RETRIES");
+            return true;
         }
 
         ArticleState.ImageResult fallbackImage = fallbackImage(initialRequirement);
@@ -238,7 +245,7 @@ public class ImageToolExecutor implements NodeAction {
         if (attempt >= MAX_REPLAN_ATTEMPTS || shouldFallback(reviewResult)) {
             return null;
         }
-        return imageAgent.replanSingleImage(ImageObservation.builder()
+        ArticleState.ImageRequirement replanned = imageAgent.replanSingleImage(ImageObservation.builder()
                 .taskId(reviewState.getTaskId())
                 .topic(reviewState.getTopic())
                 .mainTitle(reviewState.getTitle() != null ? reviewState.getTitle().getMainTitle() : null)
@@ -248,6 +255,9 @@ public class ImageToolExecutor implements NodeAction {
                 .reviewResult(reviewResult)
                 .attempt(attempt)
                 .build(), reviewState.getEnabledImageMethods());
+        log.info("ImageAgent 已根据图片评审建议重规划单图: taskId={}, position={}, attempt={}, nextAttempt={}, imageSource={}",
+                reviewState.getTaskId(), requirement.getPosition(), attempt, attempt + 1, replanned.getImageSource());
+        return replanned;
     }
 
     private boolean shouldFallback(ImageReviewResult reviewResult) {
@@ -321,6 +331,21 @@ public class ImageToolExecutor implements NodeAction {
                 return;
             }
         }
+    }
+
+    private void markTraceForImage(List<ArticleState.ImageExecutionTrace> traces,
+                                   ArticleState.ImageResult image,
+                                   String status) {
+        for (int i = traces.size() - 1; i >= 0; i--) {
+            ArticleState.ImageExecutionTrace trace = traces.get(i);
+            if ((image.getUrl() == null || image.getUrl().equals(trace.getUrl()))
+                    && (image.getPlaceholderId() == null || image.getPlaceholderId().equals(trace.getPlaceholderId()))
+                    && (image.getPosition() == null || image.getPosition().equals(trace.getPosition()))) {
+                trace.setFinalStatus(status);
+                return;
+            }
+        }
+        markLastTrace(traces, image.getPosition(), status);
     }
 
     private void pushImageComplete(Consumer<String> streamHandler, ArticleState.ImageResult imageResult) {

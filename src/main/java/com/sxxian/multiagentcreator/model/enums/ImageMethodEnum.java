@@ -3,88 +3,64 @@ package com.sxxian.multiagentcreator.model.enums;
 import lombok.Getter;
 
 /**
- * 配图方式枚举
- *
- * 扩展新的图片来源时，只需添加新的枚举值并设置正确的属性：
- * - isAiGenerated: 是否为 AI 生图方式（决定使用 prompt 还是 keywords）
- * - isFallback: 是否为降级方案
- *
- * @author <a href="https://codefather.cn">编程导航学习圈</a>
+ * Image source methods.
  */
 @Getter
 public enum ImageMethodEnum {
 
     /**
-     * Pexels 图库检索
+     * Pexels stock image search.
      */
     PEXELS("PEXELS", "Pexels 图库", false, false),
 
     /**
-     * Nano Banana AI 生图（Gemini 原生图片生成）
+     * Domestic web image search for Chinese entities, IP, films and hot topics.
+     */
+    CHINA_IMAGE_SEARCH("CHINA_IMAGE_SEARCH", "国内图库检索", false, false),
+
+    /**
+     * Nano Banana AI image generation.
      */
     NANO_BANANA("NANO_BANANA", "Nano Banana AI 生图", true, false),
 
     /**
-     * Mermaid 流程图生成
+     * Mermaid flowchart generation.
      */
     MERMAID("MERMAID", "Mermaid 流程图生成", true, false),
 
     /**
-     * Graphviz DOT 流程图生成
+     * Graphviz DOT flowchart generation.
      */
     GRAPHVIZ("GRAPHVIZ", "Graphviz DOT 流程图生成", true, false),
 
     /**
-     * Iconify 图标库检索
+     * Iconify icon search.
      */
     ICONIFY("ICONIFY", "Iconify 图标库", false, false),
 
     /**
-     * 表情包检索（Bing 图片搜索）
+     * Meme image search.
      */
     EMOJI_PACK("EMOJI_PACK", "表情包检索", false, false),
 
     /**
-     * SVG 概念示意图生成（AI 生成 SVG 代码）
+     * SVG concept diagram generation.
      */
     SVG_DIAGRAM("SVG_DIAGRAM", "SVG 概念示意图", true, false),
 
     /**
-     * 千问文生图（DashScope AI 生图）
+     * Qwen text-to-image generation.
      */
     QWEN_IMAGE("QWEN_IMAGE", "百炼文生图（wanx-v1）", true, false),
 
     /**
-     * Picsum 随机图片（降级方案）
+     * Picsum fallback image.
      */
     PICSUM("PICSUM", "Picsum 随机图片", false, true);
 
-    // ============ 扩展示例 ============
-    // DALL_E("DALL_E", "DALL-E AI 生图", true, false),
-    // MIDJOURNEY("MIDJOURNEY", "Midjourney AI 生图", true, false),
-    // UNSPLASH("UNSPLASH", "Unsplash 图库", false, false),
-    // STABLE_DIFFUSION("STABLE_DIFFUSION", "Stable Diffusion AI 生图", true, false),
-
-    /**
-     * 方法值
-     */
     private final String value;
-
-    /**
-     * 方法描述
-     */
     private final String description;
-
-    /**
-     * 是否为 AI 生图方式
-     * true: 使用 prompt 生成图片（如 DALL-E、Midjourney、Nano Banana）
-     * false: 使用 keywords 检索图片（如 Pexels、Unsplash）
-     */
     private final boolean aiGenerated;
-
-    /**
-     * 是否为降级方案
-     */
     private final boolean fallback;
 
     ImageMethodEnum(String value, String description, boolean aiGenerated, boolean fallback) {
@@ -94,12 +70,6 @@ public enum ImageMethodEnum {
         this.fallback = fallback;
     }
 
-    /**
-     * 根据值获取枚举
-     *
-     * @param value 方法值
-     * @return 枚举实例
-     */
     public static ImageMethodEnum getByValue(String value) {
         if (value == null) {
             return null;
@@ -112,23 +82,14 @@ public enum ImageMethodEnum {
         return null;
     }
 
-    /**
-     * 获取默认的图库检索方式
-     */
     public static ImageMethodEnum getDefaultSearchMethod() {
-        return PEXELS;
+        return CHINA_IMAGE_SEARCH;
     }
 
-    /**
-     * 获取默认的 AI 生图方式
-     */
     public static ImageMethodEnum getDefaultAiMethod() {
         return QWEN_IMAGE;
     }
 
-    /**
-     * 获取降级方案
-     */
     public static ImageMethodEnum getFallbackMethod() {
         return PICSUM;
     }
