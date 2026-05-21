@@ -37,5 +37,20 @@ public class ArticleCreateRequest implements Serializable {
      */
     private List<String> enabledImageMethods;
 
+    /**
+     * 是否允许使用个人知识库增强。
+     */
+    private Boolean knowledgeEnhanced;
+
+    /**
+     * 是否优先使用写作风格记忆。
+     */
+    private Boolean useWritingStyleMemory;
+
+    /**
+     * 本次创作允许使用的知识库 ID 列表；为空时由规则服务在用户可用知识库中选择。
+     */
+    private List<Long> knowledgeBaseIds;
+
     private static final long serialVersionUID = 1L;
 }

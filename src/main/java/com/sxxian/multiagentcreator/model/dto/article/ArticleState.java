@@ -42,6 +42,11 @@ public class ArticleState implements Serializable {
     private String wordRange;
 
     /**
+     * RAG 检索得到的可选写作上下文。
+     */
+    private String retrievedContext;
+
+    /**
      * 当前阶段
      */
     private String phase;

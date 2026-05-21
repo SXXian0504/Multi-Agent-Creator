@@ -43,6 +43,12 @@ public class ArticleVO implements Serializable {
      */
     private String userDescription;
 
+    private Integer knowledgeEnhanced;
+
+    private Integer useWritingStyleMemory;
+
+    private String knowledgeBaseIds;
+
     /**
      * 字数范围
      */

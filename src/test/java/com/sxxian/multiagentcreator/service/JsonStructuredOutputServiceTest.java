@@ -1,8 +1,8 @@
 package com.sxxian.multiagentcreator.service;
 
 import com.google.gson.reflect.TypeToken;
-import com.sxxian.multiagentcreator.agent.agents.ContentMergerAgent;
-import com.sxxian.multiagentcreator.agent.ImageAgent;
+import com.sxxian.multiagentcreator.article.workflow.ContentMergeService;
+import com.sxxian.multiagentcreator.image.planning.ImageAgent;
 import com.sxxian.multiagentcreator.exception.StructuredOutputException;
 import com.sxxian.multiagentcreator.model.dto.article.ArticleState;
 import com.sxxian.multiagentcreator.model.dto.review.ImageReviewResult;
@@ -221,14 +221,14 @@ class JsonStructuredOutputServiceTest {
 
     @Test
     void contentMergerInsertsImageAfterMatchingSectionWhenPlaceholderIsAbsent() {
-        ContentMergerAgent mergerAgent = new ContentMergerAgent();
+        ContentMergeService mergeService = new ContentMergeService();
         ArticleState.ImageResult image = new ArticleState.ImageResult();
         image.setPosition(2);
         image.setSectionTitle("解决方案");
         image.setUrl("https://example.com/image.png");
         image.setDescription("solution");
 
-        String fullContent = mergerAgent.mergeImagesIntoContent("""
+        String fullContent = mergeService.mergeImagesIntoContent("""
                 # 标题
 
                 ## 痛点

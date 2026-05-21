@@ -50,6 +50,9 @@ declare namespace API {
     style?: string
     wordRange?: string
     enabledImageMethods?: string[]
+    knowledgeEnhanced?: boolean
+    useWritingStyleMemory?: boolean
+    knowledgeBaseIds?: number[]
   }
 
   type ArticleQueryRequest = {
@@ -68,6 +71,9 @@ declare namespace API {
     topic?: string
     platform?: string
     userDescription?: string
+    knowledgeEnhanced?: number
+    useWritingStyleMemory?: number
+    knowledgeBaseIds?: string
     mainTitle?: string
     subTitle?: string
     titleOptions?: TitleOption[]
@@ -99,6 +105,57 @@ declare namespace API {
     code?: number
     data?: boolean
     message?: string
+  }
+
+  type BaseResponseKnowledgeBaseVO = {
+    code?: number
+    data?: KnowledgeBaseVO
+    message?: string
+  }
+
+  type BaseResponseKnowledgeDocumentVO = {
+    code?: number
+    data?: KnowledgeDocumentVO
+    message?: string
+  }
+
+  type BaseResponseListKnowledgeBaseVO = {
+    code?: number
+    data?: KnowledgeBaseVO[]
+    message?: string
+  }
+
+  type BaseResponseListKnowledgeDocumentVO = {
+    code?: number
+    data?: KnowledgeDocumentVO[]
+    message?: string
+  }
+
+  type KnowledgeBaseCreateRequest = {
+    name?: string
+    description?: string
+    type?: string
+  }
+
+  type KnowledgeBaseVO = {
+    id?: number
+    name?: string
+    description?: string
+    type?: string
+    status?: string
+    createTime?: string
+  }
+
+  type KnowledgeDocumentVO = {
+    id?: number
+    knowledgeBaseId?: number
+    fileName?: string
+    fileType?: string
+    fileSize?: number
+    parseStatus?: string
+    chunkCount?: number
+    errorMessage?: string
+    createTime?: string
   }
 
   type BaseResponseListOutlineSection = {

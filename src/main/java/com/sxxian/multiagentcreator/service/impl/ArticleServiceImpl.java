@@ -15,7 +15,7 @@ import com.sxxian.multiagentcreator.model.entity.User;
 import com.sxxian.multiagentcreator.model.enums.ArticlePhaseEnum;
 import com.sxxian.multiagentcreator.model.enums.ArticleStatusEnum;
 import com.sxxian.multiagentcreator.model.vo.ArticleVO;
-import com.sxxian.multiagentcreator.service.ArticleAgentService;
+import com.sxxian.multiagentcreator.article.workflow.legacy.LegacyArticleWorkflow;
 import com.sxxian.multiagentcreator.service.ArticleService;
 import com.sxxian.multiagentcreator.service.QuotaService;
 import com.sxxian.multiagentcreator.utils.GsonUtils;
@@ -47,10 +47,12 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
     private QuotaService quotaService;
 
     @Resource
-    private ArticleAgentService articleAgentService;
+    private LegacyArticleWorkflow legacyArticleWorkflow;
 
     @Override
-    public String createArticleTask(String topic, String platform, String style, String wordRange, List<String> enabledImageMethods, User loginUser) {
+    public String createArticleTask(String topic, String platform, String style, String wordRange, List<String> enabledImageMethods,
+                                    Boolean knowledgeEnhanced, Boolean useWritingStyleMemory, List<Long> knowledgeBaseIds,
+                                    User loginUser) {
         // 处理配图方式：如果用户未选择，给普通用户设置默认的非 VIP 方式
         List<String> finalImageMethods = processImageMethods(enabledImageMethods, loginUser);
 
@@ -70,6 +72,10 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
         article.setWordRange(wordRange);
         article.setEnabledImageMethods(finalImageMethods != null && !finalImageMethods.isEmpty()
                 ? GsonUtils.toJson(finalImageMethods) : null);
+        article.setKnowledgeEnhanced(Boolean.TRUE.equals(knowledgeEnhanced) ? 1 : 0);
+        article.setUseWritingStyleMemory(Boolean.TRUE.equals(useWritingStyleMemory) ? 1 : 0);
+        article.setKnowledgeBaseIds(knowledgeBaseIds != null && !knowledgeBaseIds.isEmpty()
+                ? GsonUtils.toJson(knowledgeBaseIds) : null);
         article.setStatus(ArticleStatusEnum.PENDING.getValue());
         article.setPhase(ArticlePhaseEnum.PENDING.getValue());
         article.setCreateTime(LocalDateTime.now());
@@ -83,11 +89,14 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public String createArticleTaskWithQuotaCheck(String topic, String platform, String style, String wordRange, List<String> enabledImageMethods, User loginUser) {
+    public String createArticleTaskWithQuotaCheck(String topic, String platform, String style, String wordRange, List<String> enabledImageMethods,
+                                                 Boolean knowledgeEnhanced, Boolean useWritingStyleMemory, List<Long> knowledgeBaseIds,
+                                                 User loginUser) {
         // 在同一事务中：先扣配额，再创建任务
         // 如果任务创建失败，配额会自动回滚
         quotaService.checkAndConsumeQuota(loginUser);
-        return createArticleTask(topic, platform, style, wordRange, enabledImageMethods, loginUser);
+        return createArticleTask(topic, platform, style, wordRange, enabledImageMethods,
+                knowledgeEnhanced, useWritingStyleMemory, knowledgeBaseIds, loginUser);
     }
 
     @Override
@@ -328,7 +337,7 @@ public class ArticleServiceImpl extends ServiceImpl<ArticleMapper, Article> impl
         );
 
         // 调用 AI 修改大纲
-        List<ArticleState.OutlineSection> modifiedOutline = articleAgentService.aiModifyOutline(
+        List<ArticleState.OutlineSection> modifiedOutline = legacyArticleWorkflow.aiModifyOutline(
                 article.getMainTitle(),
                 article.getSubTitle(),
                 currentOutline,

@@ -19,7 +19,7 @@ public class AgentConfig {
     /**
      * 是否启用多智能体编排器
      * true: 使用新的 Spring AI Alibaba 多智能体编排
-     * false: 使用原有的 ArticleAgentService
+     * false: 使用原有的 LegacyArticleWorkflow
      */
     @Value("${article.agent.orchestrator.enabled:true}")
     private boolean orchestratorEnabled;

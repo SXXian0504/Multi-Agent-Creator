@@ -68,6 +68,29 @@ services:
     command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}
 
   # ============ 后端服务 ============
+  # ============ PostgreSQL + pgvector 知识库向量库 ============
+  pgvector:
+    image: pgvector/pgvector:pg16
+    container_name: multi-agent-creator-pgvector
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${RAG_POSTGRES_DB:-multi_agent_rag}
+      POSTGRES_USER: ${RAG_POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${RAG_POSTGRES_PASSWORD:-postgres}
+      TZ: ${TZ:-Asia/Shanghai}
+    ports:
+      - "${RAG_POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgvector-data:/var/lib/postgresql/data
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${RAG_POSTGRES_USER:-postgres} -d ${RAG_POSTGRES_DB:-multi_agent_rag}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
   backend:
     build:
       context: .
@@ -91,6 +114,11 @@ services:
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
       SPRING_DATA_REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+
+      # RAG / pgvector 配置
+      RAG_DATASOURCE_URL: jdbc:postgresql://pgvector:5432/${RAG_POSTGRES_DB:-multi_agent_rag}
+      RAG_DATASOURCE_USERNAME: ${RAG_POSTGRES_USER:-postgres}
+      RAG_DATASOURCE_PASSWORD: ${RAG_POSTGRES_PASSWORD:-postgres}
       
       # AI 配置（必需）
       DASHSCOPE_API_KEY: ${DASHSCOPE_API_KEY:?请在 .env 中设置 DASHSCOPE_API_KEY}
@@ -121,6 +149,8 @@ services:
       mysql:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      pgvector:
         condition: service_healthy
     networks:
       - app-network
@@ -178,3 +208,5 @@ volumes:
     name: ai-passage-mysql-data
   redis-data:
     name: ai-passage-redis-data
+  pgvector-data:
+    name: multi-agent-creator-pgvector-data

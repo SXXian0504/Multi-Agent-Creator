@@ -2,10 +2,10 @@ package com.sxxian.multiagentcreator.agent.parallel;
 
 import com.alibaba.cloud.ai.graph.OverAllState;
 import com.alibaba.cloud.ai.graph.action.NodeAction;
-import com.sxxian.multiagentcreator.agent.ImageToolExecutor;
+import com.sxxian.multiagentcreator.image.execution.ImageToolExecutionService;
 import com.sxxian.multiagentcreator.agent.context.StreamHandlerContext;
-import com.sxxian.multiagentcreator.agent.ReviewAgent;
-import com.sxxian.multiagentcreator.agent.tools.ImageGenerationTool;
+import com.sxxian.multiagentcreator.article.review.ReviewAgent;
+import com.sxxian.multiagentcreator.image.execution.ImageGenerationTool;
 import com.sxxian.multiagentcreator.model.dto.image.ImageExecutionResult;
 import com.sxxian.multiagentcreator.model.dto.article.ArticleState;
 import com.sxxian.multiagentcreator.model.dto.review.ImageReviewResult;
@@ -36,7 +36,7 @@ public class ParallelImageGenerator implements NodeAction {
 
     private final ImageGenerationTool imageGenerationTool;
     private final ReviewAgent reviewAgent;
-    private final ImageToolExecutor imageToolExecutor;
+    private final ImageToolExecutionService imageToolExecutionService;
 
     public static final String INPUT_IMAGE_REQUIREMENTS = "imageRequirements";
     public static final String OUTPUT_IMAGES = "images";
@@ -73,7 +73,7 @@ public class ParallelImageGenerator implements NodeAction {
         }
 
         ArticleState reviewState = buildReviewState(state);
-        ImageExecutionResult executionResult = imageToolExecutor.execute(imageRequirements, reviewState, streamHandler);
+        ImageExecutionResult executionResult = imageToolExecutionService.execute(imageRequirements, reviewState, streamHandler);
         List<ArticleState.ImageResult> allImages = executionResult.getImages();
         List<ImageReviewResult> imageReviewResults = executionResult.getImageReviewResults();
 

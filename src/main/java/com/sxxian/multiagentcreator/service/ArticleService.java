@@ -27,7 +27,9 @@ public interface ArticleService extends IService<Article> {
      * @param loginUser 当前登录用户
      * @return 任务ID
      */
-    String createArticleTask(String topic, String platform, String style, String wordRange, List<String> enabledImageMethods, User loginUser);
+    String createArticleTask(String topic, String platform, String style, String wordRange, List<String> enabledImageMethods,
+                             Boolean knowledgeEnhanced, Boolean useWritingStyleMemory, List<Long> knowledgeBaseIds,
+                             User loginUser);
 
     /**
      * 创建文章任务（带配额检查）
@@ -40,7 +42,9 @@ public interface ArticleService extends IService<Article> {
      * @param loginUser 当前登录用户
      * @return 任务ID
      */
-    String createArticleTaskWithQuotaCheck(String topic, String platform, String style, String wordRange, List<String> enabledImageMethods, User loginUser);
+    String createArticleTaskWithQuotaCheck(String topic, String platform, String style, String wordRange, List<String> enabledImageMethods,
+                                           Boolean knowledgeEnhanced, Boolean useWritingStyleMemory, List<Long> knowledgeBaseIds,
+                                           User loginUser);
 
     /**
      * 根据任务ID获取文章

@@ -49,6 +49,8 @@ public class ArticleContext implements Serializable {
 
     private String reviewAdvice;
 
+    private String retrievedContext;
+
     private List<UserFeedback> feedbackHistory = new ArrayList<>();
 
     public static ArticleContext fromState(ArticleState state) {
@@ -67,6 +69,7 @@ public class ArticleContext implements Serializable {
         context.setOutlineReviewResult(state.getOutlineReviewResult());
         context.setContent(state.getContent());
         context.setContentReviewResult(state.getContentReviewResult());
+        context.setRetrievedContext(state.getRetrievedContext());
         return context;
     }
 
@@ -85,6 +88,7 @@ public class ArticleContext implements Serializable {
         state.setOutlineReviewResult(outlineReviewResult);
         state.setContent(content);
         state.setContentReviewResult(contentReviewResult);
+        state.setRetrievedContext(retrievedContext);
     }
 
     public String getLatestFeedbackContent(String phase) {

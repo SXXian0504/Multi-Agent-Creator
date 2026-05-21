@@ -15,7 +15,7 @@ import com.sxxian.multiagentcreator.model.entity.User;
 import com.sxxian.multiagentcreator.model.vo.AgentExecutionStats;
 import com.sxxian.multiagentcreator.model.vo.ArticleVO;
 import com.sxxian.multiagentcreator.service.AgentLogService;
-import com.sxxian.multiagentcreator.service.ArticleAsyncService;
+import com.sxxian.multiagentcreator.article.application.ArticleGenerationApplicationService;
 import com.sxxian.multiagentcreator.service.ArticleService;
 import com.sxxian.multiagentcreator.service.SkillService;
 import com.sxxian.multiagentcreator.service.UserService;
@@ -39,7 +39,7 @@ public class ArticleController {
     private ArticleService articleService;
 
     @Resource
-    private ArticleAsyncService articleAsyncService;
+    private ArticleGenerationApplicationService articleGenerationApplicationService;
 
     @Resource
     private SseEmitterManager sseEmitterManager;
@@ -79,11 +79,14 @@ public class ArticleController {
                 request.getStyle(),
                 request.getWordRange(),
                 request.getEnabledImageMethods(),
+                request.getKnowledgeEnhanced(),
+                request.getUseWritingStyleMemory(),
+                request.getKnowledgeBaseIds(),
                 loginUser
         );
 
         // 异步执行阶段1：生成标题方案
-        articleAsyncService.executePhase1(
+        articleGenerationApplicationService.executePhase1(
                 taskId,
                 request.getTopic(),
                 request.getPlatform(),
@@ -202,7 +205,7 @@ public class ArticleController {
         );
 
         // 异步执行阶段2：生成大纲
-        articleAsyncService.executePhase2(request.getTaskId());
+        articleGenerationApplicationService.executePhase2(request.getTaskId());
 
         return ResultUtils.success(null);
     }
@@ -230,7 +233,7 @@ public class ArticleController {
         );
 
         // 异步执行阶段3：生成正文+配图
-        articleAsyncService.executePhase3(request.getTaskId());
+        articleGenerationApplicationService.executePhase3(request.getTaskId());
 
         return ResultUtils.success(null);
     }

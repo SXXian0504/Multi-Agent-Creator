@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Multi-Agent-Creator 项目面试深挖问答</title>
+  <title>Multi-Agent-Creator 项目面试深化问答</title>
   <style>
     body { margin: 0; font-family: Arial, "Microsoft YaHei", sans-serif; background: #f6f8fb; color: #1f2937; }
     header { position: sticky; top: 0; z-index: 10; background: #ffffff; border-bottom: 1px solid #e5e7eb; padding: 18px 28px; }
@@ -25,8 +25,8 @@
 </head>
 <body>
   <header>
-    <h1>Multi-Agent-Creator 项目面试深挖问答</h1>
-    <div class="meta">共 89 题，包含基础项目深挖、系统设计与可解释性、RAG 规划、项目不足与优化方向。</div>
+    <h1>Multi-Agent-Creator 项目面试深化问答</h1>
+    <div class="meta">共 95 题，包含基础项目深挖、系统设计与可解释性、RAG 实现细节、项目不足与优化方向。</div>
   </header>
   <main>
     <div class="toolbar">
@@ -332,62 +332,86 @@
         </details>
         <details class="qa-card">
           <summary><span class="num">75</span><span class="tag">系统设计与可解释性</span><span class="question">当前项目中 RAG 的真实作用是什么？</span></summary>
-          <div class="answer">设计目的：客观说明当前实现状态，避免把规划中的能力说成已落地。<br>实现方式：当前仓库 README 和文档里有 RAG、PGVector、Query Rewrite、Multi Query 的设计说明，但代码主链路没有看到 RetrievalDecisionService、PGVector Retriever、Embedding 写入等已实现模块。因此面试中应该把 RAG 表达为“规划中的可选增强能力”或“简历里谨慎弱化”，不要说它已经深度接入主流程。<br>解决的问题：这能避免被面试官追问代码类名、表结构和召回逻辑时答不上来。<br>面试表达话术：当前项目的主亮点是 Multi-Agent Workflow、结构化输出、工具调度、Review 和可观测性。RAG 我设计为后续用于个人知识库和写作资料增强，不作为第一版主链路必经步骤。<br>可能追问：如果问为什么不先做 RAG，可以说第一版优先解决生成闭环和稳定性，RAG 会增加文档解析、向量库、召回质量和权限隔离复杂度，适合作为第二阶段增强。</div>
+          <div class="answer">S：项目原来的创作链路主要依赖用户一次性输入 topic、platform、style 和 userDescription，模型缺少用户私有资料、历史文风、品牌设定和专业文档支撑，写专业内容时容易泛化或编造。<br>T：我在阶段 8 要解决的是“可选个人知识库增强”，让用户显式开启后，系统能把私有资料作为证据注入标题、大纲、正文生成，但不能让 RAG 成为主链路的强依赖。<br>A：我落地了一个 RAG MVP：KnowledgeBase/KnowledgeDocument/KnowledgeIngestionJob 保存元数据；DocumentStorageService 做 COS 优先、本地兜底；DocumentParserService 解析 txt、md、pdf、docx；DocumentChunker 切片；RagEmbeddingService 生成 embedding；PgVectorKnowledgeRepository 用 PostgreSQL + pgvector 保存 chunk 并按 userId、knowledgeBaseId 过滤 topK 检索；RetrievalDecisionService 决定是否检索；RagContextBuilder 压缩为 retrievedContext；ArticleAsyncService 在标题、大纲、正文阶段调用 RagService，ArticleAgent 把 retrievedContext 注入 prompt。<br>R：现在 RAG 的真实作用是“可选知识增强层”：未开启时不触发；开启但检索失败时降级普通创作；检索成功时生成内容可以体现用户上传资料。面试时我会强调它不是为了堆技术，而是为私有知识、风格记忆和专业资料复用服务。<br>可能追问：如果问代码入口，可以回答 KnowledgeBaseController 负责知识库接口，DocumentIngestionService 负责异步入库，RagService 是生成链路入口，PgVectorKnowledgeRepository 是向量检索落点。</div>
         </details>
         <details class="qa-card">
-          <summary><span class="num">76</span><span class="tag">系统设计与可解释性</span><span class="question">RAG 如果接入内容生成，会解决什么问题？</span></summary>
-          <div class="answer">设计目的：说明 RAG 的业务价值，而不是只讲向量检索。<br>实现方式：在自媒体创作里，RAG 适合接入用户历史文章、品牌资料、人物设定、专业文档、产品说明和参考素材。生成标题、大纲、正文前，系统根据 topic 和用户意图检索相关 chunk，把高相关片段作为 retrievedContext 注入 Prompt。<br>解决的问题：RAG 可以解决私有知识、事实资料、风格复用和专业内容准确性问题。比如写品牌宣传文时，模型不能凭空编产品卖点，应该检索品牌资料后再写。<br>面试表达话术：我不会把 RAG 当成所有文章的默认步骤，而是作为可选知识增强。只有用户开启知识库或题目明显需要资料支撑时才检索，避免无效召回污染上下文。<br>可能追问：如果问 RAG 降低幻觉的原理，可以说它把模型回答从纯参数记忆转为“基于外部证据生成”，但最终表述仍由 LLM 生成，所以只能降低，不能完全消除幻觉。</div>
+          <summary><span class="num">76</span><span class="tag">系统设计与可解释性</span><span class="question">请按 STAR 讲清楚 RAG 从上传到生成的完整链路。</span></summary>
+          <div class="answer">S：用户想写一篇结合个人资料或品牌资料的文章时，仅靠 prompt 粘贴资料不稳定，也不适合长期复用。尤其是历史文风、项目文档、产品说明这类资料，需要沉淀成可检索知识库。<br>T：我的目标是做一条最小但完整的 RAG 闭环：上传资料 -&gt; 解析切片 -&gt; 向量化存储 -&gt; 创作时决策检索 -&gt; 召回上下文 -&gt; 注入 Agent prompt。<br>A：第一步，用户在前端创建知识库并上传文件，后端 KnowledgeBaseController 调用 KnowledgeBaseService；第二步，DocumentStorageService 保存原始文件，MySQL 记录 KnowledgeDocument，DocumentIngestionService 异步解析；第三步，DocumentParserService 按文件类型解析文本，DocumentChunker 生成 chunk、hash、tokenCount 和 metadata；第四步，RagEmbeddingService 调 DashScope embeddings 或本地 fallback 生成向量；第五步，PgVectorKnowledgeRepository 写入 pgvector 的 knowledge_chunk 表；第六步，创作时 ArticleAsyncService 调 RagService，RetrievalDecisionService 根据开关、知识库类型、用户选择和关键词决定是否检索；第七步，KnowledgeRetriever 做 topK 召回，RagContextBuilder 压缩成 retrievedContext，ArticleAgent 在标题、大纲、正文 prompt 里使用。<br>R：这样用户不需要每次复制资料，系统也能在不破坏主流程的情况下复用私有知识。失败时 RagService catch 异常并返回空上下文，确保文章生成不中断。<br>可能追问：如果问为什么先做规则决策而不是 RetrievalDecisionAgent，可以说 MVP 阶段更重视稳定、可解释和低成本，复杂 Agentic RAG 放到第二阶段。</div>
         </details>
         <details class="qa-card">
-          <summary><span class="num">77</span><span class="tag">系统设计与可解释性</span><span class="question">Query Rewrite、Multi Query、PGVector 分别解决什么问题？</span></summary>
-          <div class="answer">设计目的：说明 RAG 子模块各自价值，避免只会背术语。<br>实现方式：Query Rewrite 把用户口语化选题改写成更适合检索的查询，例如提取产品名、场景、受众和内容目标；Multi Query 从多个角度生成检索查询，例如主题事实、风格样例、用户画像、竞品资料，提升召回覆盖；PGVector 用 PostgreSQL 向量扩展保存 chunk embedding，并按 userId/knowledgeBaseId 做过滤和相似度 topK 检索。<br>解决的问题：Rewrite 提升单次查询质量，Multi Query 降低漏召回，PGVector 解决向量存储和相似度检索。<br>面试表达话术：RAG 的难点不是“把文本向量化”，而是如何构造好查询、控制召回范围、过滤低质量 chunk，并把证据安全注入到 Agent 上下文。<br>可能追问：如果问为什么不用 Elasticsearch，可以说关键词检索适合精确匹配，向量检索适合语义相似；实际可做 hybrid search，用 BM25 + vector rerank。</div>
+          <summary><span class="num">77</span><span class="tag">系统设计与可解释性</span><span class="question">RAG 的数据模型和权限隔离怎么设计？</span></summary>
+          <div class="answer">S：个人知识库涉及用户私有资料，如果隔离做不好，会出现 A 用户召回 B 用户文档的严重安全问题。<br>T：我需要把业务元数据、原始文件和向量 chunk 分层存储，并在每一层都保留 userId 过滤条件。<br>A：MySQL 保存业务元数据：KnowledgeBase 记录 userId、name、type、status；KnowledgeDocument 记录 userId、knowledgeBaseId、fileName、fileType、fileSize、storageUrl、parseStatus、chunkCount；KnowledgeIngestionJob 记录解析任务状态。pgvector 侧 knowledge_chunk 保存 user_id、knowledge_base_id、document_id、chunk_index、content、content_hash、token_count、metadata、embedding。检索 SQL 必须带 WHERE user_id = ? AND knowledge_base_id IN (...)，知识库列表也只查当前 loginUser 的数据。<br>R：这样权限隔离不是只靠前端选择，而是服务层和向量检索层都带租户过滤。即使用户伪造 knowledgeBaseId，也会在 listAvailableKnowledgeBases 和 pgvector 查询条件中被拦住。<br>可能追问：如果问跨用户共享怎么做，可以说 MVP 明确不做共享；后续要做也应增加 ACL 表或 teamId，而不是移除 userId 过滤。</div>
         </details>
         <details class="qa-card">
-          <summary><span class="num">78</span><span class="tag">系统设计与可解释性</span><span class="question">RAG 如何降低幻觉？为什么不能完全消除？</span></summary>
-          <div class="answer">设计目的：展示对 RAG 边界的理解。<br>实现方式：RAG 通过检索外部知识，把事实、术语、产品参数、历史风格样例提供给模型，Prompt 中要求优先依据 retrievedContext。这样模型不用完全依赖训练参数，可以减少编造。<br>解决的问题：它能降低事实错误、风格不一致和资料遗漏，但不能完全消除幻觉，原因包括召回可能不相关、知识库本身可能过期或错误、chunk 被截断导致上下文缺失、模型可能错误综合证据、用户问题超出知识库覆盖。<br>面试表达话术：我会把 RAG 当作“证据增强机制”，不是事实正确性的绝对保证。生产上还要做相似度阈值、引用片段展示、低置信度拒答、人工审核和评测集。<br>可能追问：如果没有命中高质量知识，可以回答系统应该明确降级为普通生成，并在上下文里标记 no_reliable_context，避免模型假装引用资料。</div>
+          <summary><span class="num">78</span><span class="tag">系统设计与可解释性</span><span class="question">文档解析、切片和 embedding 具体怎么做？</span></summary>
+          <div class="answer">S：RAG 的质量很大程度取决于入库质量。如果解析出来的文本脏、chunk 太大或太碎，后续向量检索会召回低质量片段。<br>T：我需要支持常见资料格式，同时保持实现足够轻量，适合 MVP 快速闭环。<br>A：文件类型限制为 txt、md、pdf、docx。txt/md 直接读取文本；pdf 使用 PDFBox 抽取文本；docx 使用 Apache POI 读取段落。解析后交给 DocumentChunker，按段落和长度做切片，给每个 chunk 生成 chunkIndex、contentHash、tokenCount 和 metadata，metadata 里保留知识库类型、chunkIndex、source=user_upload 等信息。embedding 由 RagEmbeddingService 处理，生产走 DashScope-compatible embeddings endpoint，默认模型 text-embedding-v4，维度配置为 1536；本地开发没有 API Key 时可以启用 deterministic fallback 跑通链路，但它只用于开发验证，不代表真实语义检索质量。<br>R：这套设计让入库链路可解释、可替换，也方便排查。例如 parseStatus 可以定位是解析失败、embedding 失败还是 pgvector 写入失败；contentHash 可以后续做去重。<br>可能追问：如果问为什么不直接整篇文档向量化，可以说整篇文档太长会稀释语义，chunk 粒度更适合 topK 召回和 prompt 注入。</div>
         </details>
         <details class="qa-card">
-          <summary><span class="num">79</span><span class="tag">系统设计与可解释性</span><span class="question">RAG 和微调有什么区别？</span></summary>
-          <div class="answer">设计目的：解释技术选型边界。<br>实现方式：RAG 是推理时检索外部知识，把相关片段放进上下文；微调是训练或适配模型参数，让模型长期学会某种格式、风格或任务模式。<br>解决的问题：RAG 适合频繁变化、私有化、需要可追溯证据的知识；微调适合稳定的输出风格、领域表达习惯、固定任务格式。RAG 更新知识只需要更新库，微调更新成本更高。<br>面试表达话术：对这个项目来说，用户资料和创作素材变化频繁，所以优先 RAG；如果后续有大量高质量样本，希望模型稳定掌握平台文风或评审标准，可以考虑轻量微调或 LoRA。<br>可能追问：如果问二者能否结合，可以说可以，RAG 负责事实和资料，微调负责表达风格和任务服从。</div>
+          <summary><span class="num">79</span><span class="tag">系统设计与可解释性</span><span class="question">pgvector 是否需要 API Key？为什么单独用 PostgreSQL 连接？</span></summary>
+          <div class="answer">S：接入 RAG 时容易把“向量数据库”和“embedding 模型”混在一起，导致部署和排障不清晰。<br>T：我需要明确依赖边界：pgvector 负责存储和相似度检索，embedding 服务负责把文本转成向量。<br>A：pgvector 不需要外部 API Key，它只是 PostgreSQL 的 vector 扩展。本地用 docker-compose.rag.yml 启动 pgvector/pgvector:pg16，默认库 multi_agent_rag、用户 postgres、密码 postgres。真正需要 API Key 的是 RagEmbeddingService 调用 DashScope embedding。代码里 PgVectorKnowledgeRepository 没接 Spring 主 datasource，而是通过 DriverManager 使用 rag.datasource.* 独立连接 PostgreSQL，原因是项目主库是 MySQL + MyBatis-Flex，RAG 向量库是 PostgreSQL，强行混到 Spring 主数据源会增加配置复杂度和误用风险。<br>R：这样部署时 MySQL 继续管业务表，PostgreSQL + pgvector 管向量表，边界清楚。容器部署时后端连接 jdbc:postgresql://pgvector:5432/multi_agent_rag；本地开发连接 localhost:5432。<br>可能追问：如果问连接失败怎么办，可以说 RagService 会降级普通创作，同时日志提示 pgvector 连接失败；启动 Docker Desktop 后执行 docker compose -f docker-compose.rag.yml up -d pgvector。</div>
         </details>
         <details class="qa-card">
-          <summary><span class="num">80</span><span class="tag">系统设计与可解释性</span><span class="question">48 小时内建议补哪些轻量 RAG 增强点？</span></summary>
-          <div class="answer">设计目的：给出有面试价值且可落地的增强路线。<br>实现方式：第一，做一个最小 KnowledgeBase/Chunk 表，可以先不用 PGVector，使用 MySQL 存文档和 chunk，模拟检索或接 Spring AI SimpleVectorStore；第二，接入 EmbeddingModel + PGVector 或本地向量存储，实现 topK 检索；第三，增加 RetrievalDecisionService，根据用户开关、知识库是否有内容、topic 是否命中关键词决定是否检索；第四，在 ArticleContext 增加 retrievedContext，并在 ArticleAgent 的标题/大纲/正文 Prompt 中注入；第五，在 AgentLog metadata 记录 retrievalQuery、hitCount、topScore、chunkIds。<br>解决的问题：这些点能形成完整的“上传资料 -&gt; 检索 -&gt; 注入 -&gt; 可观测”的 RAG MVP。<br>面试表达话术：如果时间有限，我不会一上来做 Agentic RAG，而是先做可解释的 Deterministic RAG MVP。重点是能展示召回片段、相似度和是否参与生成。<br>可能追问：如果问 Query Rewrite 是否必做，可以说 48 小时内可以先做规则改写，后续再加 QueryRewriteAgent 和 Multi Query。</div>
+          <summary><span class="num">80</span><span class="tag">系统设计与可解释性</span><span class="question">RetrievalDecisionService 为什么用规则，而不是一开始就用 Agent？</span></summary>
+          <div class="answer">S：RAG 如果每次创作都检索，会增加延迟和成本；如果召回不相关内容，还会污染 prompt，导致生成偏题。<br>T：MVP 阶段需要一个稳定、可解释、低成本的“是否检索”决策，而不是把这个判断完全交给模型。<br>A：RetrievalDecisionService 会先检查用户是否开启 knowledgeEnhanced，再看用户是否勾选 useWritingStyleMemory、是否选择了知识库、当前用户是否有可用知识库，以及 topic/userDescription 是否包含“参考资料、按照设定、结合文档、专业、案例、数据、报告”等触发意图。决策通过后输出 shouldRetrieve、targetKnowledgeBaseIds、query、reason；KnowledgeRetriever 再按目标知识库检索。<br>R：规则决策的好处是可预测、可调试、成本低。面试时可以强调：我不是不会做 RetrievalDecisionAgent，而是先用 deterministic RAG MVP 建立闭环，等有日志和样本后再让 Agent 做多知识库路由、query rewrite 和 multi query。<br>可能追问：如果问规则不够智能怎么办，可以说后续会把规则结果作为 Agent 决策的 guardrail，Agent 可以补充查询和目标库，但不能越权访问。</div>
         </details>
         <details class="qa-card">
-          <summary><span class="num">81</span><span class="tag">系统设计与可解释性</span><span class="question">最适合写进简历的 5 个项目亮点是什么？</span></summary>
+          <summary><span class="num">81</span><span class="tag">系统设计与可解释性</span><span class="question">RAG 失败时如何保证不影响普通创作？</span></summary>
+          <div class="answer">S：外部依赖越多，生成链路越容易因为局部故障失败。RAG 依赖 embedding 服务、PostgreSQL、pgvector 扩展和文档解析任务，任何一个环节都可能异常。<br>T：我需要保证知识库增强是“增强项”，而不是主链路单点故障。<br>A：RagService.buildRetrievedContext 外层 catch 所有异常，记录 warn 摘要和 debug 堆栈后返回空字符串；ArticleAsyncService 继续执行标题、大纲、正文生成；ArticleAgent 只有在 retrievedContext 非空时才注入知识上下文。上传解析侧如果 pgvector 未启动，文档任务会失败或 chunk 写入失败，需要重传或重试，但不会影响用户普通文章创作。<br>R：线上表现是 RAG 出问题时文章还能生成，只是缺少知识库增强。面试时我会说这是“软依赖降级”，适合 MVP 和生产稳定性。<br>可能追问：如果问日志怎么优化，可以说 warn 不打印完整堆栈，完整堆栈放 debug，避免异步任务刷屏。</div>
+        </details>
+        <details class="qa-card">
+          <summary><span class="num">82</span><span class="tag">系统设计与可解释性</span><span class="question">RAG 和项目已有 Skill 的区别是什么？</span></summary>
+          <div class="answer">S：项目里已经有写作 Skill，面试官可能会问为什么还需要 RAG。<br>T：我需要区分“稳定写作规则”和“用户私有知识资料”两类能力。<br>A：Skill 更像配置化 prompt/rubric，适合沉淀稳定风格、平台规则、标题结构、正文语气和评审标准；它通常随代码或配置发布，输入较短、结构稳定。RAG 是运行时知识库，适合用户上传的历史文章、品牌资料、人物设定、项目文档、产品说明和专业报告；它通过 chunk、embedding、pgvector 在创作时动态召回。两者在 ArticleAgent 中可以叠加：Skill 决定怎么写，RAG 提供写什么和参考哪些证据。<br>R：这样设计后，通用风格不需要每次检索，私有资料也不需要硬编码进 Skill。<br>可能追问：如果问写作风格应该放哪，可以说稳定、抽象的风格规则放 Skill；具体历史文章样本和用户个人表达习惯可以放 style_memory 知识库，用 RAG 召回样例。</div>
+        </details>
+        <details class="qa-card">
+          <summary><span class="num">83</span><span class="tag">系统设计与可解释性</span><span class="question">RAG 如何控制上下文长度，避免 prompt 被资料塞爆？</span></summary>
+          <div class="answer">S：LLM 上下文窗口有限，如果把召回的 chunk 原样全部塞进 prompt，会增加成本，也可能冲淡用户当前主题。<br>T：我需要让召回内容足够有用，同时保持 prompt 可控。<br>A：配置层有 rag.top-k 和 rag.context-max-chars，当前默认 topK=8、contextMaxChars=4000。KnowledgeRetriever 先按向量相似度召回有限 chunk，RagContextBuilder 再把 chunk 压缩成结构化 retrievedContext，保留来源、知识库类型和核心内容，超过长度时截断。ArticleAgent 只接收这个压缩后的上下文，而不是完整文档。<br>R：这样做能控制 token 成本和生成稳定性，也便于面试解释为什么 RAG 是证据摘要而不是文档拼接。<br>可能追问：如果问更进一步怎么优化，可以说增加 reranker、去重、MMR、多阶段摘要和按标题/大纲/正文阶段使用不同 topK。</div>
+        </details>
+        <details class="qa-card">
+          <summary><span class="num">84</span><span class="tag">系统设计与可解释性</span><span class="question">为什么 RAG 不是所有文章默认开启？</span></summary>
+          <div class="answer">S：RAG 不是免费的能力，它会增加检索耗时、embedding 成本和上下文噪声。很多泛主题文章不需要私有资料。<br>T：我需要让知识库增强既有价值，又不会污染普通创作体验。<br>A：前端默认关闭 knowledgeEnhanced，用户显式开启才允许检索；即使开启，RetrievalDecisionService 也会判断是否真的需要检索。如果用户没有可用知识库、没有选择目标知识库、没有写“参考资料/结合文档/按照设定”等意图，系统可以跳过检索。<br>R：这样 RAG 是可选增强而不是固定步骤。面试中可以强调：我更关注“该不该检索”和“检索什么”，而不是机械地每次都向量查询。<br>可能追问：如果用户强制选择知识库怎么办，可以说 selectedKnowledgeBaseIds 会提高检索优先级，但仍然要做权限过滤和上下文长度控制。</div>
+        </details>
+        <details class="qa-card">
+          <summary><span class="num">85</span><span class="tag">系统设计与可解释性</span><span class="question">如何评估 RAG 是否真的提升了生成质量？</span></summary>
+          <div class="answer">S：RAG 很容易停留在“技术接入成功”，但接入成功不等于质量提升。<br>T：我需要设计可验证指标，证明召回内容确实被使用，并且没有带来负收益。<br>A：第一，链路指标：文档解析成功率、embedding 成功率、pgvector 写入成功率、检索 hitCount、topScore、retrievedChunkCount、RAG 降级率；第二，质量指标：同一主题对比开启/关闭 RAG 的事实准确性、资料覆盖率、风格一致性和 ReviewAgent 得分；第三，人工样本集：准备包含品牌资料、专业文档、历史文风的固定题目，让人工判断是否正确引用资料；第四，日志侧把 chunkIds、knowledgeBaseIds、decisionReason 写入 AgentLog metadata。<br>R：这样能避免只凭个例判断 RAG 有效，也能定位问题是入库、召回、注入还是生成阶段。<br>可能追问：如果 RAG 反而降低质量，可以说要看低质量 chunk、相似度阈值、reranker、上下文压缩和提示词约束。</div>
+        </details>
+        <details class="qa-card">
+          <summary><span class="num">86</span><span class="tag">系统设计与可解释性</span><span class="question">为什么没有一开始做 Query Rewrite、Multi Query 和 reranker？</span></summary>
+          <div class="answer">S：RAG 可以做得很复杂，但阶段 8 的目标是 MVP，不是一次性实现完整检索系统。<br>T：我需要控制实现风险，先证明上传、入库、检索、注入、降级这条主链路可用。<br>A：所以第一版只做规则 RetrievalDecisionService 和单查询 topK。Query Rewrite、Multi Query、reranker 都放到下一阶段：Rewrite 负责把口语化 topic 改成检索查询；Multi Query 负责从事实、风格、案例等角度扩展召回；reranker 负责对 topK 候选二次排序，减少相似但无用的 chunk。<br>R：这样分阶段可以降低调试难度。如果第一版召回链路都不稳定，过早叠加 Agentic RAG 只会让问题更难定位。<br>可能追问：如果面试官问怎么补，可以回答先加 QueryRewriteAgent 输出 query/reason，再加 reranker 和评测集验证收益。</div>
+        </details>
+        <details class="qa-card">
+          <summary><span class="num">87</span><span class="tag">系统设计与可解释性</span><span class="question">最适合写进简历的 5 个项目亮点是什么？</span></summary>
           <div class="answer">设计目的：把项目价值压缩成能被技术面试官理解的工程亮点。<br>实现方式：第一，多 Agent Workflow：基于 ArticleAgentOrchestrator 编排标题、大纲、正文、配图规划、工具执行、Review 和合成。第二，结构化输出稳定性：JsonStructuredOutputService 做 JSON 提取、括号平衡、根类型校验、业务校验、重试和指标记录。第三，Tool Calling 工具体系：ImageMethodEnum + ImageServiceStrategy + ImageToolExecutor 支持多图片工具动态路由、并行执行、重规划和降级。第四，异步流式体验：@Async 自定义线程池 + CompletableFuture 并行分支 + SSE 阶段推送。第五，可观测与质量控制：ReviewAgent 质量门禁，@AgentExecution + AOP 记录 Agent 链路、耗时、异常和结构化输出指标。<br>解决的问题：这 5 点分别对应 Agent 架构、Workflow 编排、工程稳定性、工具调用、质量评估与可观测性。<br>面试表达话术：项目亮点不是“用了大模型”，而是把大模型应用做成了可控、可扩展、可观测的生产化工作流。<br>可能追问：如果问最能体现个人能力的一点，可以优先讲结构化输出 + Review + 工具降级，因为这最体现 AI 应用工程化。</div>
         </details>
         <details class="qa-card">
-          <summary><span class="num">82</span><span class="tag">系统设计与可解释性</span><span class="question">面试高频：你项目里 Prompt Engineering 怎么做？</span></summary>
+          <summary><span class="num">88</span><span class="tag">系统设计与可解释性</span><span class="question">面试高频：你项目里 Prompt Engineering 怎么做？</span></summary>
           <div class="answer">设计目的：说明 Prompt 不是简单拼字符串，而是围绕阶段目标和可解析输出设计。<br>实现方式：Prompt 按 Agent 和阶段拆分，标题、大纲、正文、配图规划、评审各有不同约束。上下文注入 topic、platform、style、wordRange、userDescription、title、outline 等字段；输出端要求 JSON 结构，并由 JsonStructuredOutputService 兜底校验。ReviewPrompt 额外注入 styleRubric、stageRubric 和 contentProfile。<br>解决的问题：角色约束保证模型知道当前任务，参数注入保证风格一致，结构化约束保证后续流程能解析。<br>面试表达话术：我的 Prompt 设计重点是“阶段目标 + 上下文继承 + 输出契约”。Prompt 只是第一层约束，真正稳定性靠后面的结构化校验和 Review。<br>可能追问：如果问如何优化 Prompt，可以说通过 AgentLog 分析失败样本，针对高频 JSON 错误、低分评审项和工具失败原因迭代 Prompt。</div>
         </details>
         <details class="qa-card">
-          <summary><span class="num">83</span><span class="tag">系统设计与可解释性</span><span class="question">面试高频：如果某个 Agent 输出质量差，你怎么定位和优化？</span></summary>
+          <summary><span class="num">89</span><span class="tag">系统设计与可解释性</span><span class="question">面试高频：如果某个 Agent 输出质量差，你怎么定位和优化？</span></summary>
           <div class="answer">设计目的：展示排障闭环。<br>实现方式：先按 taskId 查 AgentLog，找到低分 Review 或 FAILED 节点；看 metadata 中 structuredOutputMetrics，判断是 parse、schema、business 校验失败还是内容质量失败；再看 ReviewAgent 的 problems/suggestions 和阶段耗时；如果是 Prompt 问题，调整该阶段 Prompt 和 schema；如果是工具问题，查看 imageExecutionTraces 的 toolError、fallbackUsed、reviewScore。<br>解决的问题：避免凭感觉调 Prompt，而是用日志和评审结果定位。<br>面试表达话术：我会先定位问题类型，再决定优化手段。结构化失败调输出约束，质量低调 rubric 和 Prompt，工具失败调策略和 fallback，耗时高看并行和第三方 API。<br>可能追问：如果问有没有自动化评测，可以承认当前标准 Benchmark 还不完善，后续会补固定主题集和回归评测。</div>
         </details>
         <details class="qa-card">
-          <summary><span class="num">84</span><span class="tag">系统设计与可解释性</span><span class="question">面试高频：如果标题、大纲、正文风格不一致怎么办？</span></summary>
+          <summary><span class="num">90</span><span class="tag">系统设计与可解释性</span><span class="question">面试高频：如果标题、大纲、正文风格不一致怎么办？</span></summary>
           <div class="answer">设计目的：说明多阶段一致性控制。<br>实现方式：系统用 ArticleState/ArticleContext 传递同一组 topic、platform、style、wordRange、userDescription。标题经过用户确认后成为后续大纲和正文的约束；大纲生成后成为正文和配图分支的共同输入；ReviewAgent 用 styleRubric 和 stageRubric 检查风格和阶段适配；结构化输出确保大纲章节连续、配图位置和章节对应。<br>解决的问题：风格一致性不是靠一次 Prompt，而是靠上下文递进、用户确认、结构化校验和 Review 共同控制。<br>面试表达话术：我把标题作为定调，大纲作为结构骨架，正文作为展开，配图服务章节语义。每一步都继承前一步结果，并经过 ReviewAgent 评估风格匹配。<br>可能追问：如果问是否能完全保证，可以说不能百分百，但能通过一致上下文和评审门禁显著降低漂移。</div>
         </details>
         <details class="qa-card">
-          <summary><span class="num">85</span><span class="tag">系统设计与可解释性</span><span class="question">面试高频：项目最大的不足是什么？</span></summary>
-          <div class="answer">设计目的：客观呈现工程判断，避免硬吹。<br>实现方式：第一，当前主流程更接近固定 Workflow，不是完全自主 Agent；第二，RAG 主要在设计文档中，主链路尚未完整落地；第三，评审依赖 LLM-as-Judge，缺少系统化人工 Benchmark；第四，CompletableFuture 内部并行目前未统一接入自定义 Executor；第五，Python/LangGraph 生态覆盖不足，主要基于 Java/Spring AI Alibaba。<br>解决的问题：主动承认不足能提升可信度，也为后续优化留空间。<br>面试表达话术：我不会把它包装成完全自治 Agent。第一版目标是可控交付，所以选择受控 Workflow。后续我会补 RAG MVP、标准评测集、动态 Planner 和统一执行器治理。<br>可能追问：如果问为什么不用 LangGraph，可以说项目技术栈是 Java/Spring，选择 Spring AI Alibaba 更贴合后端工程；但理念上借鉴了 StateGraph/Workflow，后续可以比较引入。</div>
+          <summary><span class="num">91</span><span class="tag">系统设计与可解释性</span><span class="question">面试高频：项目最大的不足是什么？</span></summary>
+          <div class="answer">S：项目已经有多 Agent 工作流、结构化输出、工具调度、Review 闭环和 RAG MVP，但仍然不是一个完全成熟的生产级 Agent 平台。<br>T：面试中需要客观说明不足，体现工程判断，而不是把每个模块都包装成最终形态。<br>A：我会说主要不足有五点：第一，主流程仍是受控 Workflow，不是完全自主 Planner；第二，RAG 目前是 MVP，已经完成知识库上传、向量化和检索注入，但还没有 QueryRewriteAgent、Multi Query、reranker、hybrid search 和系统化召回评测；第三，Review 依赖 LLM-as-Judge，缺少固定人工 Benchmark；第四，CompletableFuture 内部并行还需要统一接入自定义 Executor 做资源治理；第五，前端知识库管理还比较轻量，缺少文档解析状态、删除、禁用和召回证据展示。<br>R：这样表达能说明我知道项目边界，也能自然引出后续优化路线。<br>可能追问：如果问为什么先做 MVP，可以说 AI 应用最怕一开始过度复杂，先保证可控闭环，再用日志和评测决定加深哪些模块。</div>
         </details>
         <details class="qa-card">
-          <summary><span class="num">86</span><span class="tag">系统设计与可解释性</span><span class="question">面试高频：如果让你重构下一版，你会怎么做？</span></summary>
-          <div class="answer">设计目的：展示演进路线。<br>实现方式：第一，把 Phase3 内部 CompletableFuture 显式接入自定义 Executor，补超时和取消；第二，实现 RAG MVP，把用户资料检索注入 ArticleContext；第三，建立 Benchmark，包括 30-50 个主题、人工评分和 LLM-as-Judge；第四，引入 PlannerAgent 或状态图，让部分流程从固定 Pipeline 演进为动态 Workflow；第五，接 OpenTelemetry，把 AgentLog 升级为标准 trace/span。<br>解决的问题：这些优化分别解决资源治理、知识增强、质量评测、Agent 自主性和可观测标准化。<br>面试表达话术：下一版我会保持主流程可控，但在检索决策、工具选择和失败恢复上增加更多动态能力，同时用评测和日志约束模型不确定性。<br>可能追问：如果问优先级，可以说先补 Benchmark 和 RAG MVP，因为它们对面试展示和产品质量收益最大。</div>
+          <summary><span class="num">92</span><span class="tag">系统设计与可解释性</span><span class="question">面试高频：如果让你重构下一版，你会怎么做？</span></summary>
+          <div class="answer">S：当前版本解决了从选题到图文生成的主链路，也补了 RAG MVP，但在自主规划、评测、资源治理和知识增强深度上仍有提升空间。<br>T：下一版目标不是推翻重写，而是在保持主流程可控的前提下，把可观测性和智能决策能力做深。<br>A：我会按优先级做五件事：第一，把 Phase3 和 ImageToolExecutor 的 CompletableFuture 显式接入专用 Executor，补超时、取消和队列监控；第二，加深 RAG，引入 QueryRewriteAgent、Multi Query、reranker、相似度阈值、召回证据展示和 retrievedChunkCount/topScore 日志；第三，建立 Benchmark，包括 30-50 个固定主题、人工评分、LLM-as-Judge 双模型交叉评审、RAG 命中率和生成质量对比；第四，引入 PlannerAgent 或动态状态图，让部分流程从固定 Pipeline 演进为受约束的动态 Workflow；第五，接 OpenTelemetry，把 AgentLog 升级为标准 trace/span。<br>R：这条路线能分别解决资源治理、知识增强、质量评测、Agent 自主性和可观测标准化问题，而且不会破坏现有可交付链路。<br>可能追问：如果问优先级，我会先做 RAG 评测和执行器治理，因为它们最能直接提升稳定性和面试可证明性。</div>
         </details>
         <details class="qa-card">
-          <summary><span class="num">87</span><span class="tag">系统设计与可解释性</span><span class="question">面试高频：如何回答“这是否只是固定 Pipeline”？</span></summary>
+          <summary><span class="num">93</span><span class="tag">系统设计与可解释性</span><span class="question">面试高频：如何回答“这是否只是固定 Pipeline”？</span></summary>
           <div class="answer">设计目的：把质疑转化为架构选择说明。<br>实现方式：承认主链路是受控 Workflow/Pipeline：标题 -&gt; 大纲 -&gt; 正文/配图 -&gt; 合成。但指出它不是简单线性 Pipeline，因为存在用户确认、结构化校验、Review 反馈、配图并行分支、工具失败重规划、fallback 和链路日志。<br>解决的问题：面试官关注的是你是否理解 Agent 自主性边界，而不是是否会包装概念。<br>面试表达话术：是的，主流程是受控 Workflow，这是我有意选择的，因为内容创作产品需要稳定、可解释和可恢复。Agentic 能力体现在局部决策和反馈闭环，而不是让模型自由决定所有步骤。<br>可能追问：如果问怎么增强自主性，可以说引入 PlannerAgent 输出执行计划，再由 Orchestrator 校验计划是否合法，形成“模型规划 + 工程约束”的混合架构。</div>
         </details>
         <details class="qa-card">
-          <summary><span class="num">88</span><span class="tag">系统设计与可解释性</span><span class="question">面试高频：如何回答“RAG 偏轻量怎么办”？</span></summary>
-          <div class="answer">设计目的：避免把未完成模块硬说成核心能力。<br>实现方式：回答时先说明当前主链路核心是 Multi-Agent Workflow，RAG 是第二阶段增强；再解释 RAG 设计目标是个人知识库、历史文章风格、品牌资料和专业知识增强；最后给出明确落地计划：文档解析、chunk、embedding、PGVector、RetrievalDecisionService、retrievedContext 注入、召回日志。<br>解决的问题：既不回避不足，也说明你知道如何补齐。<br>面试表达话术：RAG 当前确实不是项目最强亮点，所以我不会把它作为主卖点。我更强调已落地的结构化输出、工具调度和 Review 闭环；RAG 会作为可解释知识增强模块补齐。<br>可能追问：如果问 48 小时能补什么，就回答先做 Deterministic RAG MVP，不做复杂 Agentic RAG。</div>
+          <summary><span class="num">94</span><span class="tag">系统设计与可解释性</span><span class="question">面试高频：如何回答“RAG 偏轻量怎么办”？</span></summary>
+          <div class="answer">S：这个问题本质上是在考察我是否理解 RAG 的工程深度，而不是只会说“用了向量库”。<br>T：我需要既承认当前是 MVP，又说明它已经形成端到端闭环，并能清楚讲出后续如何加深。<br>A：我会回答：当前 RAG 不是复杂 Agentic RAG，但已经完成个人知识库 MVP，包括知识库元数据、文档上传、txt/md/pdf/docx 解析、chunk、embedding、pgvector 存储、规则检索决策、topK 召回、retrievedContext 注入 ArticleAgent，以及失败降级。它轻量是有意为之，因为第一版要保证主创作链路稳定。后续深化方向包括 RetrievalDecisionAgent、QueryRewriteAgent、Multi Query、reranker、hybrid search、引用片段展示、召回评测和 AgentLog 中记录 retrievedChunkCount/topScore。<br>R：这样回答既不会夸大成“完整企业级 RAG 平台”，也能证明我知道 RAG 的工程难点：入库质量、召回范围、权限隔离、上下文压缩、失败降级和可观测。<br>可能追问：如果问最值得补的一项，我会优先补召回可观测性和评测集，因为没有 hitCount、topScore、chunkIds 和人工样本，很难证明 RAG 真的提升了生成质量。</div>
         </details>
         <details class="qa-card">
-          <summary><span class="num">89</span><span class="tag">系统设计与可解释性</span><span class="question">面试高频：如何回答“缺少标准 Benchmark”？</span></summary>
+          <summary><span class="num">95</span><span class="tag">系统设计与可解释性</span><span class="question">面试高频：如何回答“缺少标准 Benchmark”？</span></summary>
           <div class="answer">设计目的：承认内容生成项目的评估短板，并给出可执行方案。<br>实现方式：当前项目有单元测试覆盖 JsonStructuredOutputService、ImageToolExecutor、ContentMergerAgent 等关键模块，但内容质量缺少固定 Benchmark。后续会构造固定主题集，保存期望风格、人工评分标准和参考样例；每次改 Prompt、模型或工具策略后批量运行，统计结构化失败率、Review 得分、人工评分、耗时和 fallback 率。<br>解决的问题：Benchmark 能防止 Prompt 调优只看个例，避免一次优化让另一个场景退化。<br>面试表达话术：我会承认现在更多是工程链路测试，内容质量评测还不够系统。下一步要把主观质量转成可重复的离线评测流程。<br>可能追问：如果问测试优先级，可以说结构化输出和工具降级必须自动化测试，内容质量先用小规模人工集 + LLM-as-Judge。</div>
         </details>
   </main>

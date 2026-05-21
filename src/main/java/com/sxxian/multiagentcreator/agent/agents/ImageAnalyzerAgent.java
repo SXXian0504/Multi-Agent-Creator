@@ -3,7 +3,7 @@ package com.sxxian.multiagentcreator.agent.agents;
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
 import com.alibaba.cloud.ai.graph.OverAllState;
 import com.alibaba.cloud.ai.graph.action.NodeAction;
-import com.sxxian.multiagentcreator.agent.ReviewAgent;
+import com.sxxian.multiagentcreator.article.review.ReviewAgent;
 import com.sxxian.multiagentcreator.constant.PromptConstant;
 import com.sxxian.multiagentcreator.exception.ReviewRejectedException;
 import com.sxxian.multiagentcreator.model.dto.article.ArticleState;

@@ -1,0 +1,24 @@
+services:
+  pgvector:
+    image: pgvector/pgvector:pg16
+    container_name: multi-agent-creator-pgvector
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${RAG_POSTGRES_DB:-multi_agent_rag}
+      POSTGRES_USER: ${RAG_POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${RAG_POSTGRES_PASSWORD:-postgres}
+      TZ: ${TZ:-Asia/Shanghai}
+    ports:
+      - "${RAG_POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgvector-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${RAG_POSTGRES_USER:-postgres} -d ${RAG_POSTGRES_DB:-multi_agent_rag}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+volumes:
+  pgvector-data:
+    name: multi-agent-creator-pgvector-data

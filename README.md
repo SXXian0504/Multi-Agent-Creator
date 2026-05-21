@@ -262,80 +262,60 @@ docker compose up -d --build
 
 ### 后端架构结构
 
+后端按业务域切片组织。文章、图片、RAG 等核心业务代码放在各自领域包内，`controller`、`service`、`model`、`mapper` 等通用层短期保留，公共 DTO/VO/Entity 后续再按引用稳定情况逐步迁移。
+
+```text
+src/main/java/com/sxxian/multiagentcreator/
+├── article/                         # 文章生成域
+│   ├── application/                  # 应用层入口、任务生命周期、SSE 事件发布
+│   │   ├── ArticleGenerationApplicationService.java
+│   │   └── ArticleGenerationEventPublisher.java
+│   ├── workflow/                     # 文章生成流程编排
+│   │   ├── OrchestratedArticleWorkflow.java
+│   │   ├── ContentMergeService.java
+│   │   └── legacy/
+│   │       └── LegacyArticleWorkflow.java
+│   ├── agent/                        # 真正 LLM 决策型文章 Agent
+│   │   └── ArticleAgent.java
+│   └── review/                       # 内容、配图计划、图片结果评审
+│       └── ReviewAgent.java
+├── image/                           # 图片域
+│   ├── planning/                     # 图片规划与失败重规划
+│   │   └── ImageAgent.java
+│   ├── execution/                    # 图片 requirement 执行、评审、重试、fallback
+│   │   ├── ImageToolExecutionService.java
+│   │   └── ImageGenerationTool.java
+│   └── adapter/                      # 具体图片/上传能力适配器
+│       ├── ImageServiceStrategy.java
+│       ├── PexelsService.java
+│       ├── QwenImageService.java
+│       ├── GraphvizService.java
+│       ├── MermaidService.java
+│       ├── IconifyService.java
+│       ├── CosService.java
+│       └── ...
+├── rag/                             # 知识库增强域
+│   ├── ingestion/                    # 文档解析、切片、embedding、索引写入
+│   ├── retrieval/                    # 检索决策、向量检索、上下文拼装
+│   │   └── RagService.java
+│   └── persistence/                  # pgvector repository
+├── eval/                            # 评测域
+├── agent/                           # Agent 基础设施：config/context/parallel/保留节点
+├── annotation/                      # 自定义注解
+├── aop/                             # 切面
+├── config/                          # 系统配置
+├── controller/                      # REST API 控制器，对外路径保持不变
+├── exception/                       # 异常处理
+├── manager/                         # SSE 等连接管理
+├── mapper/                          # 数据访问层
+├── model/                           # DTO/Entity/Enum/VO，阶段性保留共享模型
+├── service/                         # 仍未下沉到领域包的通用/存量服务
+└── utils/                           # 工具类
 ```
-├── src/main/java/com/sxxian/multiagentcreator/
-│   ├── agent/                           # Multi-Agent核心模块
-│   │   ├── agents/                      # 专用智能体实现
-│   │   │   ├── TitleGeneratorAgent.java     # 标题生成智能体
-│   │   │   ├── OutlineGeneratorAgent.java   # 大纲构建智能体
-│   │   │   ├── ContentGeneratorAgent.java   # 正文创作智能体
-│   │   │   ├── ImageAnalyzerAgent.java      # 配图分析智能体
-│   │   │   └── ContentMergerAgent.java     # 图文整合智能体
-│   │   ├── parallel/                    # 并行处理模块
-│   │   │   └── ParallelImageGenerator.java  # 并行配图生成器
-│   │   ├── config/                      # Agent配置管理
-│   │   ├── context/                     # 执行上下文
-│   │   │   └── StreamHandlerContext.java    # 流式处理上下文
-│   │   ├── tools/                       # Tool Calling工具集
-│   │   │   └── ImageGenerationTool.java     # 配图生成工具
-│   │   └── ArticleAgentOrchestrator.java # 智能体编排器
-│   ├── annotation/                      # 自定义注解
-│   │   ├── AgentExecution.java           # 智能体执行注解
-│   │   └── AuthCheck.java                # 权限验证注解
-│   ├── aop/                             # 切面编程
-│   │   ├── AgentExecutionAspect.java     # 智能体执行切面
-│   │   └── AuthInterceptor.java          # 权限拦截器
-│   ├── config/                          # 系统配置
-│   │   ├── CosConfig.java               # 腾讯云COS配置
-│   │   ├── PexelsConfig.java            # Pexels服务配置
-│   │   ├── MermaidConfig.java           # Mermaid图表配置
-│   │   ├── NanoBananaConfig.java        # AI生图配置
-│   │   ├── StripeConfig.java            # Stripe支付配置
-│   │   └── PromptConfig.java            # Prompt工程配置
-│   ├── constant/                        # 常量定义
-│   │   ├── PromptConstant.java          # Prompt模板常量
-│   │   ├── ArticleConstant.java         # 文章相关常量
-│   │   └── UserConstant.java            # 用户相关常量
-│   ├── controller/                      # REST API控制器
-│   │   ├── ArticleController.java       # 文章管理API
-│   │   ├── UserController.java          # 用户管理API
-│   │   ├── PaymentController.java       # 支付相关API
-│   │   └── StatisticsController.java    # 统计分析API
-│   ├── exception/                       # 异常处理
-│   │   ├── BusinessException.java       # 业务异常
-│   │   ├── ErrorCode.java              # 错误码定义
-│   │   └── GlobalExceptionHandler.java  # 全局异常处理器
-│   ├── manager/                         # 管理器组件
-│   │   └── SseEmitterManager.java       # SSE连接管理器
-│   ├── mapper/                          # 数据访问层
-│   │   ├── ArticleMapper.java           # 文章数据访问
-│   │   ├── UserMapper.java              # 用户数据访问
-│   │   └── AgentLogMapper.java          # 智能体日志访问
-│   ├── model/                           # 数据模型
-│   │   ├── dto/                         # 数据传输对象
-│   │   │   ├── article/                   # 文章相关DTO
-│   │   │   └── image/                     # 图片相关DTO
-│   │   ├── entity/                      # 实体类
-│   │   │   ├── Article.java              # 文章实体
-│   │   │   ├── User.java                 # 用户实体
-│   │   │   └── AgentLog.java             # 执行日志实体
-│   │   ├── enums/                      # 枚举定义
-│   │   │   ├── ArticlePhaseEnum.java     # 文章阶段枚举
-│   │   │   ├── ArticleStyleEnum.java     # 文章风格枚举
-│   │   │   └── ImageMethodEnum.java      # 配图方式枚举
-│   │   └── vo/                         # 视图对象
-│   ├── service/                         # 业务服务层
-│   │   ├── ArticleAgentService.java     # 智能体编排服务
-│   │   ├── ImageServiceStrategy.java    # 配图策略服务
-│   │   ├── RAGService.java             # RAG增强服务
-│   │   ├── CosService.java             # 腾讯云COS服务
-│   │   ├── PexelsService.java          # Pexels图库服务
-│   │   ├── NanoBananaService.java      # AI生图服务
-│   │   └── PaymentService.java         # 支付服务
-│   └── utils/                           # 工具类
-│       ├── SSEUtils.java              # SSE工具
-│       └── RAGUtils.java              # RAG相关工具
-```
+
+文章生成入口统一为 `ArticleGenerationApplicationService`。它根据配置选择 `LegacyArticleWorkflow` 或 `OrchestratedArticleWorkflow`，Controller 不直接依赖具体 workflow 或 agent。
+
+SSE 协议由 `ArticleGenerationEventPublisher` 统一转换和发送，消息类型继续使用现有 `SseMessageTypeEnum`，REST API 路径和数据库结构保持兼容。
 
 ### 前端架构结构
 

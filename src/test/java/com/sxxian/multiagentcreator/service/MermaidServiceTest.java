@@ -1,4 +1,4 @@
-package com.sxxian.multiagentcreator.service;
+package com.sxxian.multiagentcreator.image.adapter;
 
 import org.junit.jupiter.api.Test;
 

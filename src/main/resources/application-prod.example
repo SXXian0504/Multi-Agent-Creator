@@ -6,6 +6,10 @@ server:
   port: 8123
 
 spring:
+  servlet:
+    multipart:
+      max-file-size: ${SPRING_SERVLET_MULTIPART_MAX_FILE_SIZE:50MB}
+      max-request-size: ${SPRING_SERVLET_MULTIPART_MAX_REQUEST_SIZE:60MB}
   # MySQL 数据库配置（通过环境变量覆盖）
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -23,6 +27,12 @@ spring:
   ai:
     dashscope:
       api-key: ${DASHSCOPE_API_KEY:xxx}
+
+rag:
+  datasource:
+    url: ${RAG_DATASOURCE_URL:jdbc:postgresql://localhost:5432/multi_agent_rag}
+    username: ${RAG_DATASOURCE_USERNAME:postgres}
+    password: ${RAG_DATASOURCE_PASSWORD:postgres}
 
 # Pexels API 配置
 pexels:

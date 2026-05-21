@@ -110,6 +110,54 @@
                 </a-radio-group>
               </div>
 
+              <!-- 知识库增强 -->
+              <div class="knowledge-section">
+                <div class="section-header">
+                  <span class="section-title">知识库增强</span>
+                  <span class="section-tip">（使用你的资料、设定和写作风格）</span>
+                </div>
+                <div class="knowledge-toggle">
+                  <a-switch v-model:checked="knowledgeEnhanced" />
+                  <span>{{ knowledgeEnhanced ? '已允许检索个人知识库' : '默认不使用知识库' }}</span>
+                </div>
+                <div v-if="knowledgeEnhanced" class="knowledge-panel">
+                  <a-checkbox v-model:checked="useWritingStyleMemory">
+                    使用我的写作风格记忆
+                  </a-checkbox>
+                  <a-select
+                    v-model:value="selectedKnowledgeBaseIds"
+                    mode="multiple"
+                    allow-clear
+                    placeholder="选择知识库；不选则由规则服务自动判断"
+                    class="knowledge-select"
+                    :options="knowledgeBaseOptions"
+                  />
+                  <div class="knowledge-create-row">
+                    <a-input v-model:value="newKnowledgeBaseName" placeholder="新知识库名称" />
+                    <a-select v-model:value="newKnowledgeBaseType" class="knowledge-type-select" :options="knowledgeTypeOptions" />
+                    <a-button @click="createKnowledgeBaseInline">创建</a-button>
+                  </div>
+                  <div class="knowledge-upload-row">
+                    <a-select
+                      v-model:value="selectedUploadKnowledgeBaseId"
+                      placeholder="选择上传目标"
+                      class="knowledge-upload-select"
+                      :options="knowledgeBaseOptions"
+                    />
+                    <a-upload
+                      :show-upload-list="false"
+                      :before-upload="handleKnowledgeUpload"
+                      accept=".txt,.md,.pdf,.docx"
+                    >
+                      <a-button :loading="knowledgeUploading">
+                        <UploadOutlined />
+                        上传资料
+                      </a-button>
+                    </a-upload>
+                  </div>
+                </div>
+              </div>
+
               <!-- 配图方式选择 -->
               <div class="image-methods-section">
                 <div class="section-header">
@@ -595,9 +643,15 @@ import {
   PictureOutlined,
   WarningOutlined,
   CrownOutlined,
-  FileTextOutlined
+  FileTextOutlined,
+  UploadOutlined
 } from '@ant-design/icons-vue'
 import { createArticle, confirmTitle, confirmOutline, getWritingSkills } from '@/api/articleController'
+import {
+  createKnowledgeBase,
+  listKnowledgeBases,
+  uploadKnowledgeDocument,
+} from '@/api/knowledgeBaseController'
 import { connectSSE, closeSSE, type SSEMessage } from '@/utils/sse'
 import { isAdmin as checkIsAdmin, isVip as checkIsVip, hasQuota as checkHasQuota } from '@/utils/permission'
 import { articleMarkdownToHtml } from '@/utils/markdown'
@@ -669,6 +723,15 @@ const selectedPlatform = ref('')
 const selectedWordRange = ref('')  // 选中的字数范围（空字符串表示由 AI 自动评估）
 const selectedStyle = ref('')  // 选中的文章风格（空字符串表示默认）
 const selectedImageMethods = ref<string[]>([])  // 选中的配图方式（空数组表示全部）
+const knowledgeEnhanced = ref(false)
+const useWritingStyleMemory = ref(false)
+const selectedKnowledgeBaseIds = ref<number[]>([])
+const selectedUploadKnowledgeBaseId = ref<number | undefined>(undefined)
+const knowledgeBases = ref<API.KnowledgeBaseVO[]>([])
+const newKnowledgeBaseName = ref('')
+const newKnowledgeBaseType = ref('style_memory')
+const knowledgeUploading = ref(false)
+const knowledgeUploadMaxSizeMb = 50
 const isCreating = ref(false)
 const isCompleted = ref(false)
 const isStreaming = ref(false)
@@ -686,6 +749,21 @@ interface RealtimeLog {
   message: string
 }
 const realtimeLogs = ref<RealtimeLog[]>([])
+
+const knowledgeTypeOptions = [
+  { value: 'style_memory', label: '写作风格' },
+  { value: 'persona_memory', label: '人设/品牌设定' },
+  { value: 'domain_knowledge', label: '专业资料' },
+  { value: 'project_docs', label: '项目文档' },
+  { value: 'task_reference', label: '当前任务参考' },
+]
+
+const knowledgeBaseOptions = computed(() =>
+  knowledgeBases.value.map((item) => ({
+    value: item.id!,
+    label: `${item.name || '未命名知识库'} · ${knowledgeTypeOptions.find((type) => type.value === item.type)?.label || item.type || ''}`,
+  })).filter((item) => item.value)
+)
 
 // 标题方案
 const titleOptions = ref<Array<{mainTitle: string, subTitle: string}>>([])
@@ -806,7 +884,10 @@ const startCreate = async () => {
       platform: selectedPlatform.value || undefined,
       style: selectedStyle.value || undefined,
       wordRange: selectedWordRange.value || undefined,
-      enabledImageMethods: selectedImageMethods.value.length > 0 ? selectedImageMethods.value : undefined
+      enabledImageMethods: selectedImageMethods.value.length > 0 ? selectedImageMethods.value : undefined,
+      knowledgeEnhanced: knowledgeEnhanced.value,
+      useWritingStyleMemory: useWritingStyleMemory.value,
+      knowledgeBaseIds: selectedKnowledgeBaseIds.value.length > 0 ? selectedKnowledgeBaseIds.value : undefined,
     })
     const newTaskId = res.data.data
     if (!newTaskId) {
@@ -1096,6 +1177,9 @@ const resetCreate = () => {
   outlineRaw.value = ''
   confirmLoading.value = false
   realtimeLogs.value = []
+  knowledgeEnhanced.value = false
+  useWritingStyleMemory.value = false
+  selectedKnowledgeBaseIds.value = []
   article.value = {
     mainTitle: '',
     subTitle: '',
@@ -1111,6 +1195,7 @@ onMounted(() => {
     topic.value = route.query.topic as string
   }
   loadWritingSkillOptions()
+  loadKnowledgeBases()
 })
 
 const loadWritingSkillOptions = async () => {
@@ -1136,6 +1221,62 @@ const loadWritingSkillOptions = async () => {
   } catch (error) {
     console.warn('加载写作 Skill 选项失败，使用本地默认选项', error)
   }
+}
+
+const loadKnowledgeBases = async () => {
+  try {
+    const res = await listKnowledgeBases()
+    knowledgeBases.value = res.data.data || []
+    if (!selectedUploadKnowledgeBaseId.value && knowledgeBases.value.length > 0) {
+      selectedUploadKnowledgeBaseId.value = knowledgeBases.value[0].id
+    }
+  } catch (error) {
+    console.warn('加载知识库失败', error)
+  }
+}
+
+const createKnowledgeBaseInline = async () => {
+  if (!newKnowledgeBaseName.value.trim()) {
+    message.warning('请输入知识库名称')
+    return
+  }
+  try {
+    await createKnowledgeBase({
+      name: newKnowledgeBaseName.value.trim(),
+      type: newKnowledgeBaseType.value,
+    })
+    message.success('知识库已创建')
+    newKnowledgeBaseName.value = ''
+    await loadKnowledgeBases()
+  } catch (error) {
+    const err = error as Error
+    message.error(err.message || '创建知识库失败')
+  }
+}
+
+const handleKnowledgeUpload = async (file: File) => {
+  if (!selectedUploadKnowledgeBaseId.value) {
+    message.warning('请选择上传目标知识库')
+    return false
+  }
+  if (file.size > knowledgeUploadMaxSizeMb * 1024 * 1024) {
+    message.error(`上传文件过大，知识库单文件最大支持 ${knowledgeUploadMaxSizeMb}MB`)
+    return false
+  }
+  knowledgeUploading.value = true
+  try {
+    await uploadKnowledgeDocument({
+      knowledgeBaseId: selectedUploadKnowledgeBaseId.value,
+      file,
+    })
+    message.success('资料已上传，系统将异步解析索引')
+  } catch (error) {
+    const err = error as Error
+    message.error(err.message || '上传资料失败')
+  } finally {
+    knowledgeUploading.value = false
+  }
+  return false
 }
 
 // 组件卸载前关闭 SSE
@@ -1399,7 +1540,8 @@ onBeforeUnmount(() => {
 /* 字数范围和文章风格选择 */
 .platform-section,
 .word-range-section,
-.style-section {
+.style-section,
+.knowledge-section {
   padding: 16px;
   background: var(--color-background-secondary);
   border-radius: var(--radius-lg);
@@ -1435,6 +1577,41 @@ onBeforeUnmount(() => {
 .option-group :deep(.ant-radio-wrapper-checked) {
   border-color: var(--color-primary);
   background: #FFF8E7;
+}
+
+.knowledge-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--color-text-secondary);
+  font-size: 14px;
+}
+
+.knowledge-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.knowledge-select,
+.knowledge-type-select,
+.knowledge-upload-select {
+  width: 100%;
+}
+
+.knowledge-create-row,
+.knowledge-upload-row {
+  display: grid;
+  gap: 8px;
+  align-items: center;
+}
+
+.knowledge-create-row {
+  grid-template-columns: minmax(0, 1fr) 160px auto;
+}
+
+.knowledge-upload-row {
+  grid-template-columns: minmax(0, 1fr) auto;
 }
 
 /* 配图方式选择 */

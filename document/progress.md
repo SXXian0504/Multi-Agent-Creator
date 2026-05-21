@@ -1,4 +1,4 @@
-# 项目优化进度日志
+﻿# 项目优化进度日志
 
 本文档用于沉淀多阶段优化进展。较早阶段只保留关键结论和交付物，最近阶段保留较完整的问题背景、修改内容和遗留事项。
 
@@ -600,3 +600,420 @@ C:\Users\sxxia\.m2\wrapper\dists\apache-maven-3.9.14\db91789b\bin\mvn.cmd -q "-D
 cd multi-agent-creator
 npm run type-check
 ```
+
+## 2026-05-20 阶段 8：RAG MVP 知识库增强
+
+### 背景
+
+本阶段对应 `document/plan.md` 的“阶段 8：RAG MVP”，目标是先完成可选个人知识库增强的最小闭环，而不是直接实现复杂 Agentic RAG。
+
+当前实现重点：
+- 用户可以创建个人知识库。
+- 用户可以上传 `txt/md/pdf/docx` 文档。
+- 系统保存知识库和文档元数据。
+- 文档异步解析、切片、向量化并写入 pgvector。
+- 创作时用户可以显式开启知识库增强。
+- 规则服务决定是否检索知识库。
+- 检索上下文注入标题、大纲、正文生成 prompt。
+- RAG 失败时降级为普通创作，不中断文章生成。
+
+明确未做：
+- `RetrievalDecisionAgent`
+- `QueryRewriteAgent`
+- reranker
+- 联网检索
+- 跨用户知识库共享
+
+### 已完成内容
+
+后端能力：
+1. 新增知识库元数据模型与服务：`KnowledgeBase`、`KnowledgeDocument`、`KnowledgeIngestionJob`。
+2. 新增知识库接口：
+   - `POST /knowledge-base/create`
+   - `GET /knowledge-base/list`
+   - `POST /knowledge-base/{knowledgeBaseId}/upload`
+   - `GET /knowledge-base/{knowledgeBaseId}/documents`
+3. 文档上传采用 COS 优先、本地文件系统兜底。
+4. 文档解析支持：
+   - `txt/md` 直接读取
+   - `pdf` 使用 PDFBox
+   - `docx` 使用 Apache POI
+5. `DocumentChunker` 负责切片，并记录 `chunkIndex`、`contentHash`、`tokenCount`、metadata。
+6. `RagEmbeddingService` 默认调用 DashScope-compatible embeddings endpoint，并提供本地 deterministic fallback 方便开发跑通链路。
+7. `PgVectorKnowledgeRepository` 使用独立 PostgreSQL JDBC / `DriverManager` 写入和检索 pgvector，不干扰 MySQL + MyBatis-Flex 主数据源。
+8. 新增 `RetrievalDecisionService`、`KnowledgeRetriever`、`RagContextBuilder`、`RagService`。
+9. 文章生成链路接入 RAG：
+   - `ArticleCreateRequest` 增加知识库增强字段
+   - `Article` / `ArticleState` / `ArticleContext` / `ArticleVO` 同步字段
+   - `ArticleAsyncService` 在标题、大纲、正文阶段构建 `retrievedContext`
+   - `ArticleAgent` 将 `retrievedContext` 注入 prompt
+   - `ArticleAgentOrchestrator` 保留并传递 `retrievedContext`
+
+前端能力：
+1. `ArticleCreatePage.vue` 增加知识库增强区域。
+2. 支持开关“知识库增强”、勾选“使用我的写作风格记忆”、多选知识库、内联创建知识库、上传文档到指定知识库。
+3. 新增 `multi-agent-creator/src/api/knowledgeBaseController.ts`。
+4. 更新 `multi-agent-creator/src/api/typings.d.ts`。
+
+数据库与配置：
+1. 新增 `sql/add_rag_tables.sql`。
+2. 更新 `sql/create_table.sql`。
+3. 新增 RAG 配置：`rag.enabled`、`rag.top-k`、`rag.context-max-chars`、`rag.local-storage-dir`、`rag.datasource.*`、`rag.embedding.*`。
+4. 新增 `docker-compose.rag.yml`，用于本地单独启动 pgvector。
+5. 更新主 `docker-compose.yml`，增加 `pgvector` 服务，并让后端容器连接 `jdbc:postgresql://pgvector:5432/...`。
+
+### 运行依赖说明
+
+pgvector 本身不需要外部 API Key。它只是 PostgreSQL 的向量扩展。
+
+需要外部 API Key 的是 embedding 服务：
+- 生产环境建议配置 `spring.ai.dashscope.api-key`
+- 当前 `RagEmbeddingService` 支持本地 fallback，但 fallback 只用于开发跑通链路，不具备真实语义检索质量
+
+本地 RAG 需要启动 PostgreSQL + pgvector：
+
+```powershell
+docker compose -f docker-compose.rag.yml up -d pgvector
+```
+
+默认连接配置：
+
+```yaml
+rag:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/multi_agent_rag
+    username: postgres
+    password: postgres
+```
+
+如果使用完整 Docker Compose 部署，后端不能连接 `localhost:5432`，应连接 Compose 服务名：
+
+```yaml
+RAG_DATASOURCE_URL: jdbc:postgresql://pgvector:5432/multi_agent_rag
+```
+
+### 运行中修复
+
+#### 1. 知识库文件上传超过 1MB 失败
+
+问题现象：
+
+```text
+MaxUploadSizeExceededException: Maximum upload size exceeded
+FileSizeLimitExceededException: The field file exceeds its maximum permitted size of 1048576 bytes.
+```
+
+原因：
+- Spring Boot 默认 multipart 单文件上限为 1MB。
+- 错误发生在 multipart 解析阶段，尚未进入 `KnowledgeBaseController`。
+
+修复：
+1. 在 `application.yml` 增加 `spring.servlet.multipart.max-file-size=50MB` 和 `spring.servlet.multipart.max-request-size=60MB`。
+2. 同步更新 `application-local.yml.example` 和 `application-prod.example`。
+3. `GlobalExceptionHandler` 增加 `MaxUploadSizeExceededException` 处理，返回明确业务提示。
+4. 前端上传前增加 50MB 文件大小检查。
+
+#### 2. RAG 检索连接 pgvector 失败
+
+问题现象：
+
+```text
+pgvector 检索失败: Connection to localhost:5432 refused
+```
+
+原因：
+- 本地没有启动 PostgreSQL + pgvector。
+- 原主 `docker-compose.yml` 没有 pgvector 服务。
+- 容器部署时后端如果连接 `localhost:5432`，实际指向后端容器自身，而不是 pgvector 容器。
+
+修复：
+1. 新增独立 `docker-compose.rag.yml`，方便本地只启动 pgvector。
+2. 主 `docker-compose.yml` 增加 `pgvector` 服务、健康检查和数据卷。
+3. 后端 Docker 环境变量增加 `RAG_DATASOURCE_URL`、`RAG_DATASOURCE_USERNAME`、`RAG_DATASOURCE_PASSWORD`。
+4. `RagService` 降级日志降噪：warn 只记录摘要，完整堆栈放到 debug。
+
+### 验证结果
+
+已执行通过：
+
+```powershell
+$env:JAVA_HOME='C:\Users\sxxia\.jdks\ms-21.0.10'
+C:\Users\sxxia\.m2\wrapper\dists\apache-maven-3.9.14\db91789b\bin\mvn.cmd -q "-Dmaven.resources.skip=true" -DskipTests compile
+C:\Users\sxxia\.m2\wrapper\dists\apache-maven-3.9.14\db91789b\bin\mvn.cmd -q "-Dmaven.resources.skip=true" "-Dtest=DocumentChunkerTest,RetrievalDecisionServiceTest,JsonStructuredOutputServiceTest" test
+
+cd multi-agent-creator
+npm run type-check
+```
+
+新增 pgvector Compose 校验通过：
+
+```powershell
+docker compose -f docker-compose.rag.yml config
+```
+
+主 Compose 配置在补充临时必需环境变量后校验通过：
+
+```powershell
+$env:DASHSCOPE_API_KEY='dummy'
+$env:PEXELS_API_KEY='dummy'
+docker compose config
+```
+
+说明：
+- 真实启动 pgvector 时要求 Docker Desktop 正在运行。
+- 当前机器当时 Docker Desktop 未运行，启动容器失败：`open //./pipe/dockerDesktopLinuxEngine: The system cannot find the file specified.`
+
+### 当前状态
+
+- RAG MVP 代码链路已完成。
+- RAG 默认是可选增强，不会阻塞普通文章创作。
+- 未开启知识库增强时不会触发检索。
+- 开启知识库增强但 pgvector 不可用时，会降级为普通创作。
+- 文件上传默认支持最大 50MB。
+- 本地需要启动 `docker-compose.rag.yml` 中的 pgvector 后，才能验证真实向量写入和检索。
+
+### 待确认与后续建议
+
+1. 执行数据库迁移：
+   - MySQL 执行 `sql/add_rag_tables.sql`
+   - PostgreSQL 侧确保 `CREATE EXTENSION IF NOT EXISTS vector;`
+2. 启动 pgvector 后重新上传测试文档，因为 pgvector 未启动期间上传的文档可能没有成功写入 chunk。
+3. 使用真实 `spring.ai.dashscope.api-key` 跑一次端到端：
+   - 创建知识库
+   - 上传 `.md`
+   - 确认文档解析状态完成
+   - 创建文章并开启知识库增强
+   - 检查生成内容是否体现检索材料
+4. 后续可增强：
+   - 前端展示文档解析状态
+   - 增加知识库/文档删除或禁用接口
+   - AgentLog metadata 记录 `ragSkipped`、`ragError`、`retrievedChunkCount`
+   - 为 `RagService` 增加 mock 检索的单元测试
+   - 用真实 DashScope embedding 响应确认 `RagEmbeddingService` 的响应解析字段
+
+## 2026-05-21 阶段 10：AgentEval 量化评估
+
+### 背景
+
+项目决定先跳过 MCP 实现，基于当前已有架构和代码完成系统量化评估。阶段 10 的目标不是新增生成能力，而是用固定题集证明当前 Agent 闭环相对基础流程的收益，并输出可用于项目展示、简历和面试说明的 Markdown 报告。
+
+本次评估明确不启用 RAG，也不接入 MCP，避免检索质量、知识库内容质量、工具协议标准化等额外变量干扰结论。
+
+### baseline 与 experiment 定义
+
+baseline：
+
+- 不启用 RAG。
+- 不启用 MCP。
+- 使用基础 `ArticleAgentService` 链路。
+- 自动模拟用户确认：标题默认选择第一个候选，大纲默认确认。
+- ReviewAgent 主要用于记录标题、大纲、正文等评分，不作为完整闭环阻断逻辑。
+- 图片计划如果 Review 未通过，作为弱 baseline 尽量保留已有图片需求继续执行；若没有可用图片需求则记录失败。
+
+experiment：
+
+- 不启用 RAG。
+- 不启用 MCP。
+- 使用当前 `ArticleAgentOrchestrator` 完整闭环。
+- 启用 `JsonStructuredOutputService` 的解析、Schema 校验、repair、retry 指标记录。
+- 启用 `ReviewAgent` 对标题、大纲、正文、配图计划、图片结果评分。
+- 启用 `ImageAgent + ImageToolExecutor` 的单图评审、重规划和 fallback 链路。
+
+### 已完成内容
+
+1. 新增 AgentEval DTO：
+   - `AgentEvalRequest`
+   - `AgentEvalResponse`
+
+2. 新增评估执行模块：
+   - `AgentEvalService`
+   - `AgentEvalMode`
+   - `AgentEvalRunRecord`
+   - `AgentEvalApplicationRunner`
+
+3. 新增指标聚合模块：
+   - `AgentEvalAggregator`
+   - `AgentEvalSummary`
+
+4. 新增 Markdown 报告生成器：
+   - `AgentEvalReportGenerator`
+
+5. 新增接口：
+   - `POST /api/agent-eval/run`
+
+6. 新增默认评估题集：
+   - `src/main/resources/eval/topics.json`
+   - 默认 20 个主题
+
+7. 新增单元测试：
+   - `AgentEvalAggregatorTest`
+   - 覆盖指标聚合和报告结构，确保报告包含：
+     - baseline vs experiment 差异表
+     - 指标对比总表
+     - 文本分析报告
+
+8. `pom.xml` 增加：
+   - `project.build.sourceEncoding=UTF-8`
+   - 避免中文报告字符串在 Maven 编译时乱码。
+
+### 评估指标
+
+报告中会聚合以下指标：
+
+- 稳定性：
+  - 任务成功率
+  - 阶段成功率
+  - JSON 首次解析成功率
+  - Schema 通过率
+  - 平均 repair 次数
+  - 平均 retry 次数
+- 质量：
+  - 标题评分
+  - 大纲评分
+  - 正文评分
+  - 配图计划评分
+  - 图片结果评分
+  - 各阶段平均分、P50、P95、通过率
+- 耗时：
+  - 平均总耗时
+  - P95 总耗时
+  - 各 phase 平均耗时和 P95 耗时
+- 工具：
+  - 图片工具成功率
+  - 图片 fallback 触发率
+  - 平均图片重规划次数
+- token：
+  - 当前第一版优先输出 estimated tokens。
+  - 估算规则为：中文字符数约按 `字符数 / 1.5`，其他字符约按 `字符数 / 4`，输入、输出和最终状态文本合并统计。
+
+### 报告格式
+
+每次运行会生成一份 Markdown 总报告，默认路径：
+
+```text
+document/eval/{evalRunId}.md
+```
+
+报告包含：
+
+1. 评估摘要
+2. baseline vs experiment 差异表
+3. 指标对比总表
+4. 分阶段指标表
+5. 生成文章索引表
+6. 失败与重试案例表
+7. 文本分析报告
+8. Token 消耗估算
+
+### 文章产物导出
+
+为了能查看每个测试过程中 baseline 和 experiment 实际生成的图文文章，AgentEval 会为每个样本导出独立 Markdown 文件：
+
+```text
+document/eval/{evalRunId}/articles/*.md
+```
+
+每篇文章文件包含：
+
+- 分组：baseline / experiment
+- taskId
+- 原始主题
+- 成功/失败状态
+- Review 分数
+- 大纲
+- 图片 URL 和图片工具 method
+- 最终图文 Markdown 正文
+
+总报告中的“生成文章索引表”会列出每个主题对应的 baseline 和 experiment 文章路径，方便直接打开对比。
+
+### 执行方式
+
+推荐先用 1 个主题试跑：
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "http://localhost:8567/api/agent-eval/run" `
+  -ContentType "application/json" `
+  -Body '{"limit":1,"wordRange":"short","outputDir":"document/eval"}'
+```
+
+跑完整默认 20 个主题：
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "http://localhost:8567/api/agent-eval/run" `
+  -ContentType "application/json" `
+  -Body '{"limit":20,"wordRange":"short","outputDir":"document/eval"}'
+```
+
+也可以在应用启动时自动执行：
+
+```powershell
+.\mvnw.cmd spring-boot:run -Dspring-boot.run.arguments="--agent-eval.enabled=true --agent-eval.limit=20"
+```
+
+### Token 预算
+
+按完整链路、20 个主题、baseline + experiment 估算：
+
+| 规模 | 预计消耗 |
+| --- | --- |
+| 单主题单版本 | 35k - 55k tokens |
+| 单主题双版本 | 70k - 110k tokens |
+| 20 主题双版本 | 1.4M - 2.2M tokens |
+| 加 repair/retry/replan 浮动后 | 1.7M - 2.8M tokens |
+
+### 验证结果
+
+尝试执行：
+
+```powershell
+.\mvnw.cmd -Dtest=AgentEvalAggregatorTest test
+```
+
+结果：
+
+- Maven Wrapper 已能下载并启动。
+- 当前 shell 下 Maven 使用的是 Java 8 JRE，不满足项目 Java 21 要求。
+- 编译阶段失败：
+
+```text
+No compiler is provided in this environment. Perhaps you are running on a JRE rather than a JDK?
+Java version: 1.8.0_281
+```
+
+需要切换到 JDK 21 后重新执行测试。
+
+建议命令：
+
+```powershell
+$env:JAVA_HOME='C:\Users\sxxia\.jdks\ms-21.0.10'
+$env:Path="$env:JAVA_HOME\bin;$env:Path"
+.\mvnw.cmd -Dtest=AgentEvalAggregatorTest test
+```
+
+或使用本地已有 Maven：
+
+```powershell
+$env:JAVA_HOME='C:\Users\sxxia\.jdks\ms-21.0.10'
+C:\Users\sxxia\.m2\wrapper\dists\apache-maven-3.9.14\db91789b\bin\mvn.cmd -Dtest=AgentEvalAggregatorTest test
+```
+
+### 当前状态
+
+- 阶段 10 AgentEval 核心代码已完成。
+- 已支持固定题集运行 baseline/experiment。
+- 已支持 Markdown 总报告。
+- 已支持导出每次生成的 baseline/experiment 图文文章。
+- 已支持失败样本不中断整批评估，失败进入案例表。
+- 当前未在本机完成 Java 编译验证，原因是当前 shell 使用 Java 8 JRE，需要切换到 JDK 21 后执行测试。
+
+### 后续建议
+
+1. 切换到 JDK 21 后执行 `AgentEvalAggregatorTest`。
+2. 使用 `limit=1` 先跑一轮真实端到端，确认报告与文章 Markdown 都能生成。
+3. 检查 `document/eval/{evalRunId}/articles/` 下 baseline 和 experiment 图文文章是否符合预期。
+4. 再执行 `limit=20` 完整评估。
+5. 若真实模型响应 metadata 能拿到 token usage，后续可把 estimated tokens 升级为真实 usage 统计。

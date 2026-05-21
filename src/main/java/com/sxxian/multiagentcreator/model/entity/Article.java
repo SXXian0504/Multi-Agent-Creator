@@ -60,6 +60,21 @@ public class Article implements Serializable {
     private String enabledImageMethods;
 
     /**
+     * 是否开启知识库增强。
+     */
+    private Integer knowledgeEnhanced;
+
+    /**
+     * 是否使用写作风格记忆。
+     */
+    private Integer useWritingStyleMemory;
+
+    /**
+     * 本次创作允许使用的知识库 ID 列表（JSON格式）。
+     */
+    private String knowledgeBaseIds;
+
+    /**
      * 文章风格：tech/marketing/emotional/educational/humorous，可为空
      */
     private String style;
