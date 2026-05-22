@@ -6,14 +6,15 @@
 
 ## 🎯 项目简介
 
-Multi-Agent-Creator 是针对自媒体内容创作中选题难、写作慢、配图成本高等痛点，基于 **Spring AI Alibaba** 框架构建的大模型应用。项目采用 **Multi-Agent 多智能体架构**，结合 **RAG（检索增强生成）** 技术，实现了从选题策划到图文内容生成的端到端创作闭环。
+Multi-Agent-Creator 是针对自媒体内容创作中选题难、写作慢、配图成本高、风格不稳定等痛点，基于 **Spring AI Alibaba** 框架构建的大模型应用。系统采用按业务域切片的架构，将文章生成、图片规划执行、RAG 检索增强、写作风格 Skill 和评测能力拆分为清晰模块，在不改变 REST API、SSE 协议和数据库结构的前提下，支持从选题到图文内容生成的端到端创作闭环。
 
 ```
-智能体1: 选题分析 → 生成候选标题 → 用户决策
-智能体2: 标题解析 → 构建内容大纲 → 用户编辑 / AI优化
-智能体3: 大纲展开 → 生成Markdown正文
-智能体4: 内容分析 → 生成配图需求 → 多模态匹配
-智能体5: 配图执行 → 图文智能合成 → 成品输出
+文章应用层: 任务生命周期 → 阶段状态落库 → SSE 事件推送
+文章工作流: LegacyArticleWorkflow / OrchestratedArticleWorkflow 双路径编排
+文章 Agent: 标题、大纲、正文生成
+图片模块: ImageAgent 规划/重规划 → ImageToolExecutionService 执行/评审/重试/fallback
+RAG 模块: 文档解析切片 → embedding 索引 → 检索决策 → 上下文拼装
+Skill 模块: 平台、文章风格、评审标准和提示词片段配置化
 ```
 
 ## 🎨 用户界面展示
@@ -49,24 +50,26 @@ Multi-Agent-Creator 是针对自媒体内容创作中选题难、写作慢、配
 
 | 特性 | 说明  |
 |------|------|
-| 🤖 Multi-Agent协同 | 5个专用智能体分工协作，StateGraph状态机编排  |
-| 📚 RAG增强生成 | PGVector向量检索 + 查询重写优化  |
-| 🎨 多模态配图 | 6种配图策略 + Tool Calling动态调度  |
-| ⚡ 并行异步处理 | 线程池并行配图 + SSE流式输出  |
-| 💎 Stripe支付集成 | 完整的商业化会员体系 |
+| 🤖 Multi-Agent 协同 | 文章生成 Agent、图片规划 Agent、ReviewAgent 与 workflow 编排协作 |
+| 📚 RAG 增强生成 | 文档解析、切片、embedding、pgvector 检索和上下文拼装 |
+| 🎨 多模态配图 | 多种配图策略 + 图片规划/执行/评审/重规划闭环 |
+| 🧩 写作风格 Skill | 平台、风格、提示词片段和评审标准配置化 |
+| ⚡ 异步并行处理 | 文章任务异步执行、SSE 阶段推送、正文与图片路径并行 |
 | 🐳 云原生架构 | Docker容器化 + 微服务设计  |
 
 ## ✨ 核心功能特性
 
-### Multi-Agent 智能体架构
+### Multi-Agent 与 Workflow 架构
 
-| 智能体 | 职责 | 技术特点 |
+| 模块 | 职责 | 技术特点 |
 |--------|------|----------|
-| 标题生成器 | 选题分析 → 候选标题生成 | RAG增强 + 结构化输出 |
-| 大纲构建器 | 标题解析 → 内容架构设计 | 流式输出 + Human-in-the-loop |
-| 正文创作器 | 大纲展开 → Markdown生成 | 向量检索 + 上下文增强 |
-| 配图分析器 | 内容语义分析 → 配图需求生成 | 多模态理解 + 结构化决策 |
-| 图文整合器 | 配图执行 → 智能图文合成 | Tool Calling + 自动降级 |
+| `ArticleGenerationApplicationService` | 文章任务入口、阶段状态、落库、SSE 推送 | Controller 只依赖应用层 |
+| `LegacyArticleWorkflow` | 保留原 baseline 生成路径 | 兼容原有生成行为 |
+| `OrchestratedArticleWorkflow` | 编排型生成路径 | 支持正文和图片并行、fallback 后继续产出 |
+| `ArticleAgent` | 标题、大纲、正文生成 | RAG 上下文 + 结构化输出 |
+| `ImageAgent` | 图片规划和失败重规划 | 根据正文、章节和 review observation 生成图片 requirement |
+| `ReviewAgent` | 标题、大纲、正文、配图计划、图片结果评审 | 质量评分、问题定位、改进建议 |
+| `ContentMergeService` | 图文合成 | 确定性内容服务，不作为 Agent |
 
 ### 多模态配图系统（Tool Calling + 策略模式）
 
@@ -74,45 +77,50 @@ Multi-Agent-Creator 是针对自媒体内容创作中选题难、写作慢、配
 
 | 配图策略 | 技术实现 | 适用场景 |
 |----------|--------|----------|
-| Pexels图库 | 语义检索 + 关键词匹配 | 通用配图 |
-| Mermaid图表 | AI Prompt生成 | 流程/架构图 |
+| Pexels图库 | 语义检索 + 关键词匹配 | 通用真实图片 |
+| 国内图片检索 | 关键词检索 + 图片抽取 | 本土语境配图 |
+| 万相文生图 | 百炼 `wanx-v1` 文生图 | 封面、创意插画、抽象概念、信息图 |
+| Graphviz图表 | DOT 渲染 | 架构图、流程图、关系图 |
+| Mermaid图表 | Mermaid 渲染 | 流程/架构辅助图 |
 | Iconify图标 | 图标库检索 | 装饰性图标 |
-| 表情包搜索 | Bing图片API | 情感化配图 |
-| Nano Banana | Gemini AI生成 | VIP专属生图 |
+| 表情包搜索 | Bing图片检索 | 情绪化配图 |
 | SVG示意图 | AI概念图生成 | 技术示意图 |
 | Picsum降级 | 随机图片服务 | 容错保障 |
 
-> **配图系统性能**：平均配图时间4秒，整体成功率99%，支持并行处理和自动降级机制。
+> 图片生成由 `ImageAgent` 负责规划和重规划，`ImageToolExecutionService` 负责执行、评审、重试和 fallback；具体外部能力放在 `image.adapter`。
 
 ### RAG增强生成系统
 
-基于PGVector构建向量检索知识库，通过多阶段优化提升生成质量：
+当前 RAG 按 ingestion、retrieval、persistence 三层组织，文章生成侧只通过 `RagService` 获取检索上下文：
 
-- **查询重写**：优化用户输入，提升检索相关性
-- **多查询扩展**：生成多个相关查询，提高召回率
-- **上下文增强**：融合检索结果，提升生成准确性
-- **语义匹配**：基于向量相似度进行内容匹配
+- **文档摄取**：上传文档后解析文本、切片、生成 embedding，并写入 pgvector 索引
+- **检索决策**：根据文章主题、平台、风格、用户补充描述和知识库配置判断是否检索
+- **向量检索**：通过 `PgVectorKnowledgeRepository` 封装建表、写入、删除和相似度检索
+- **上下文拼装**：将召回片段整理为 `retrievedContext`，注入标题、大纲和正文生成上下文
+- **降级策略**：RAG 失败时降级为普通创作，不中断文章生成流程
 
-### 实时交互体验（SSE + 异步处理）
+### 写作风格 Skill
 
-基于Server-Sent Events实现多阶段实时进度推送：
+写作风格 Skill 用于把平台、文章风格、提示词片段和评审标准从代码中抽离出来，作为文章生成和评审的可配置上下文：
 
-| 阶段 | 消息类型 | 用户体验 |
+- **平台配置**：适配不同内容平台的表达偏好和结构要求
+- **风格配置**：控制文章语气、表达密度、专业程度和段落组织
+- **提示词片段**：复用标题、大纲、正文、配图计划和评审提示词
+- **评审标准**：为 `ReviewAgent` 提供结构、相关性、风格匹配等质量维度
+- **阶段复用**：`ArticleAgent`、`ImageAgent`、`ReviewAgent` 在不同阶段读取统一 Skill 配置
+
+### 异步处理与并行生成
+
+文章生成由 `ArticleGenerationApplicationService` 作为应用层入口，通过 `articleExecutor` 异步执行各阶段任务；`ArticleGenerationEventPublisher` 负责把内部 workflow 消息转换为现有 SSE 消息类型。
+
+| 阶段 | 处理方式 | 用户体验 |
 |------|----------|----------|
-| 标题生成 | `TITLE_GENERATED` | 实时显示候选标题 |
-| 大纲构建 | `OUTLINE_STREAMING` | 逐段流式输出大纲 |
-| 正文创作 | `CONTENT_STREAMING` | 实时Markdown生成 |
-| 配图分析 | `IMAGE_ANALYSIS_DONE` | 配图需求确认 |
-| 配图生成 | `IMAGE_GENERATED` | 单张图片生成完成 |
-| 图文整合 | `MERGE_COMPLETED` | 最终作品输出 |
-
-### 商业化功能
-
-- ✅ 文章全生命周期管理（创建、编辑、删除、导出）
-- ✅ Stripe支付集成（下单、Webhook、幂等性处理）
-- ✅ 会员配额控制（基于Redis的配额管理）
-- ✅ 智能体执行监控（AOP自动日志记录）
-- ✅ 数据分析后台（ECharts可视化统计）
+| 标题生成 | 异步任务 + 结构化输出 + 评审 | 生成多个候选标题并等待用户确认 |
+| 大纲生成 | 异步任务 + 流式输出 + 评审 | 生成结构化大纲并等待用户确认 |
+| 正文生成 | workflow 执行，orchestrated 路径支持并行 | 正文内容持续推送 |
+| 图片规划 | `ImageAgent` 输出图片 requirement | 前端可观察配图计划 |
+| 图片执行 | 多图片并行执行、单图评审、失败重规划、fallback | 单张图片完成后逐步推送 |
+| 图文合成 | `ContentMergeService` 确定性合成 | 输出最终 Markdown 图文内容 |
 
 ## 🚀 快速开始
 
@@ -133,6 +141,7 @@ mysql -uroot -p < sql/create_table.sql
 mysql -uroot -p < sql/update_quota.sql
 mysql -uroot -p < sql/add_phase_fields.sql
 mysql -uroot -p < sql/add_article_style.sql
+mysql -uroot -p < sql/add_rag_tables.sql
 ```
 
 ### 2. 环境配置
@@ -155,10 +164,11 @@ spring:
 pexels:
   api-key: your-pexels-api-key  # Pexels图库API
 
-# 商业化功能配置（可选）
-stripe:
-  api-key: sk_test_xxx  # 支付集成
-  webhook-secret: whsec_xxx  # Webhook验证
+# 百炼万相文生图配置（可选）
+qwen:
+  image:
+    api-key: your-dashscope-api-key
+    model: wanx-v1
 
 tencent:
   cos:
@@ -244,13 +254,11 @@ docker compose up -d --build
 
 | 变量名 | 默认值 | 说明 |
 |--------|--------|------|
-| DASHSCOPE_API_KEY | - | 通义千问API密钥 |
+| DASHSCOPE_API_KEY | - | 通义千问与万相文生图服务密钥 |
 | PEXELS_API_KEY  | - | Pexels图库API密钥 |
 | MYSQL_ROOT_PASSWORD  | 123456 | 数据库root密码 |
 | REDIS_PASSWORD  | - | Redis访问密码 |
-| STRIPE_API_KEY  | - | Stripe支付API密钥 |
 | TENCENT_COS_SECRET_ID  | - | 腾讯云COS密钥ID |
-| NANO_BANANA_API_KEY | - | AI生图服务密钥 |
 
 **生产环境建议**：
 - 使用Docker Secrets管理敏感信息
@@ -326,7 +334,6 @@ SSE 协议由 `ArticleGenerationEventPublisher` 统一转换和发送，消息�
 │   │   │   ├── ArticleCreatePage.vue      # 文章创作页面
 │   │   │   ├── ArticleDetailPage.vue      # 文章详情页面
 │   │   │   ├── ArticleListPage.vue        # 文章列表页面
-│   │   │   ├── VipPage.vue                # VIP会员页面
 │   │   │   └── admin/                    # 管理后台页面
 │   │   ├── components/                  # 公共组件
 │   │   │   ├── article/                  # 文章相关组件
@@ -337,7 +344,7 @@ SSE 协议由 `ArticleGenerationEventPublisher` 统一转换和发送，消息�
 │   │   ├── api/                         # API接口层
 │   │   │   ├── articleController.ts      # 文章API
 │   │   │   ├── userController.ts         # 用户API
-│   │   │   └── paymentController.ts      # 支付API
+│   │   │   └── knowledgeBaseController.ts # 知识库API
 │   │   ├── stores/                      # 状态管理
 │   │   │   └── loginUser.ts              # 用户状态管理
 │   │   ├── utils/                       # 工具函数
@@ -357,7 +364,7 @@ SSE 协议由 `ArticleGenerationEventPublisher` 统一转换和发送，消息�
 │   ├── update_quota.sql               # 配额管理更新
 │   ├── add_phase_fields.sql           # 阶段字段更新
 │   ├── add_article_style.sql          # 文章风格更新
-│   └── add_vip_payment.sql            # VIP支付功能更新
+│   └── add_rag_tables.sql             # RAG知识库表结构
 ```
 
 ## 🗄 数据模型设计
@@ -366,10 +373,12 @@ SSE 协议由 `ArticleGenerationEventPublisher` 统一转换和发送，消息�
 
 | 表名 | 功能描述 | 关键特性 |
 |------|----------|----------|
-| user | 用户账户管理 | VIP状态、创作配额、权限控制 |
+| user | 用户账户管理 | 登录身份、创作配额、权限控制 |
 | article | 文章生命周期管理 | 多阶段状态、配图策略 |
 | agent_log | 智能体执行追踪 | 性能监控、错误诊断、优化分析 |
-| payment_record | 支付交易记录 | Stripe集成、会员管理、配额分配 |
+| knowledge_base | 知识库元数据 | 风格记忆、资料库、用户隔离 |
+| knowledge_document | 知识库文档 | 上传状态、解析状态、切片统计 |
+| knowledge_ingestion_job | 文档索引任务 | 解析、切片、embedding、索引写入状态 |
 
 ### 文章表核心字段设计
 
@@ -438,13 +447,13 @@ contextRelevance     FLOAT           -- 上下文相关性评分
 | 服务名称 | 获取方式 | 配置说明 | 性能要求 |
 |----------|----------|----------|----------|
 | 通义千问(DashScope) | [阿里云百炼平台](https://bailian.console.aliyun.com) | 用于Multi-Agent协同生成 | QPS≥10，延迟<2s |
+| 万相文生图 | [阿里云百炼平台](https://bailian.console.aliyun.com) | QWEN_IMAGE / wanx-v1 图片生成 | 按图片生成任务异步轮询 |
 | Pexels API | [Pexels开发者平台](https://www.pexels.com/api/) | 高质量图库检索服务 | 成功率≥95% |
 
 ### 可选增强服务
 
 | 服务名称 | 获取方式 | 功能特性 | 适用场景 |
 |----------|----------|----------|----------|
-| Stripe支付 | [Stripe开发者控制台](https://dashboard.stripe.com) | 会员订阅、配额管理 | 商业化部署 |
 | 腾讯云COS | [腾讯云控制台](https://console.cloud.tencent.com) | 图片存储、CDN加速 | 生产环境部署 |
 | PGVector | [PostgreSQL扩展](https://github.com/pgvector/pgvector) | 向量检索、RAG增强 | 内容质量优化 |
 
@@ -477,8 +486,8 @@ service:
 | 账号 | 密码 | 权限级别 | 配额限制 | 特殊功能 |
 |------|------|----------|----------|----------|
 | admin | 12345678 | 系统管理员 | 无限制 | 用户管理、数据统计 |
-| creator | 12345678 | 高级创作者 | 100篇/月 | VIP配图方式、RAG增强 |
-| user | 12345678 | 普通用户 | 10篇/月 | 基础配图方式 |
+| creator | 12345678 | 高级创作者 | 100篇/月 | 多配图方式、RAG增强 |
+| user | 12345678 | 普通用户 | 10篇/月 | 基础创作能力 |
 | demo | 12345678 | 演示账号 | 3篇/月 | 功能体验限制 |
 
 ### 测试数据说明
@@ -486,73 +495,76 @@ service:
 **初始数据包含**：
 - 5篇示例文章（不同风格）
 - 完整的智能体执行日志
-- 用户配额和VIP状态数据
-- 支付记录模拟数据
-- 
+- 用户配额和知识库示例数据
+
 ## 🏛 核心架构设计
 
-### Multi-Agent 协同架构
+### Multi-Agent 与 Workflow 协同架构
 
-基于Spring AI Alibaba的StateGraph实现智能体编排，采用异步非阻塞架构：
+系统将“谁做决策”和“谁做流程编排”拆开：Agent 只承担 LLM 决策，workflow 负责阶段顺序、并行路径和 fallback，application service 负责任务生命周期和对外事件。
 
 **架构特点**：
-- **状态机驱动**：基于StateGraph实现智能体间的状态流转
-- **条件分支**：支持Human-in-the-loop交互，实现人机协同
-- **异步执行**：非阻塞架构确保系统高响应性
-- **错误恢复**：内置重试机制和异常处理
+- **应用层收口**：`ArticleGenerationApplicationService` 是文章任务唯一入口
+- **双路径保留**：`LegacyArticleWorkflow` 保留 baseline，`OrchestratedArticleWorkflow` 承载编排路径
+- **Agent 职责收敛**：`ArticleAgent`、`ImageAgent`、`ReviewAgent` 只处理 LLM 决策
+- **确定性服务下沉**：`ContentMergeService`、`ImageToolExecutionService` 不再作为 Agent 命名
+- **错误恢复**：图片执行支持单图重试、重规划和 fallback；RAG 失败降级为普通创作
 
 **执行流程**：
-1. 标题生成 → 用户选择 → 大纲构建 → 正文生成
-2. 配图分析 → 并行生成 → 图文整合
-3. 每个阶段支持用户介入和AI优化
+1. `ArticleGenerationApplicationService` 初始化任务状态并选择 workflow。
+2. `ArticleAgent` 依次生成标题、大纲、正文，并通过 `ReviewAgent` 评审。
+3. orchestrated 路径中，正文生成和图片规划/执行可并行推进。
+4. `ImageAgent` 生成图片 requirement，`ImageToolExecutionService` 执行、评审、重试和 fallback。
+5. `ContentMergeService` 将正文与图片结果合成为最终 Markdown。
 
 ### RAG增强生成架构
 
-基于PGVector实现的检索增强生成系统，通过多阶段优化提升内容质量：
+RAG 模块按 ingestion、retrieval、persistence 拆分，文章生成侧只依赖 `RagService`：
 
 **核心组件**：
-- **查询重写引擎**：优化用户输入，提升检索相关性
-- **多查询扩展**：生成语义相关的多个查询，提高召回率
-- **向量检索**：基于PGVector的相似度搜索
-- **上下文融合**：智能整合检索结果与用户Prompt
+- **`rag.ingestion`**：文档解析、切片、embedding、索引写入
+- **`rag.retrieval`**：检索决策、向量检索调度、上下文拼装
+- **`rag.persistence`**：pgvector 建表、写入、删除和检索封装
+- **`RagService`**：文章生成侧唯一入口，输入 Article，输出 retrievedContext
 
 ### 多模态配图系统（Tool Calling）
 
-基于Tool Calling实现的智能配图决策系统：
+图片模块拆成 planning、execution、adapter 三层：
 
 **核心特性**：
-- **动态策略选择**：基于内容类型和用户权限智能选择配图方式
-- **并行处理**：多图片并发生成，显著提升效率
-- **自动降级**：主策略失败时自动切换到备用方案
-- **高可用保障**：配图成功率99%，平均响应时间4秒
+- **规划/重规划**：`ImageAgent` 根据文章内容生成图片 requirement，并根据评审 observation 重规划
+- **执行闭环**：`ImageToolExecutionService` 负责工具调用、图片评审、重试和 fallback
+- **Adapter 隔离**：Pexels、万相文生图、Graphviz、Mermaid、Iconify、COS 等能力在 `image.adapter`
+- **并行处理**：多张图片可并行执行，单张失败不阻塞整体 fallback
 
 **配图策略**：
-- 图库检索（Pexels、Iconify等）
-- AI生成（Nano Banana、SVG Diagram等）
-- 结构化图表（Mermaid流程图）
+- 图库检索（Pexels、国内图片检索）
+- AI生成（万相文生图、SVG Diagram等）
+- 结构化图表（Graphviz、Mermaid）
+- 图标检索（Iconify）
 - 情感化配图（表情包搜索）
 
-### 异步流式处理架构
+### 异步处理与并行架构
 
-基于SSE和线程池的实时流式输出系统：
+基于应用层异步任务、workflow 并行路径和 SSE 事件发布器实现实时生成反馈：
 
 **技术特点**：
-- **实时推送**：基于Server-Sent Events的多阶段进度推送
-- **并行处理**：配图生成与内容创作并行执行
-- **连接管理**：高效的SSE连接池管理
-- **错误处理**：完善的异常捕获和用户通知机制
+- **异步入口**：`executePhase1/2/3` 通过 `articleExecutor` 执行，避免阻塞请求线程
+- **事件发布**：`ArticleGenerationEventPublisher` 统一转换 workflow 消息和 review 消息
+- **并行路径**：orchestrated workflow 支持正文和图片链路并行推进
+- **连接管理**：`SseEmitterManager` 管理长连接和完成/失败通知
+- **错误处理**：阶段失败统一更新文章状态、推送 `ERROR` 消息并关闭 SSE
 
 **性能优化**：
-- 整体生成耗时降低60%
-- 支持千级并发SSE连接
-- 毫秒级实时响应
+- 图片任务按 requirement 并发执行
+- 单图失败进入重规划或 fallback，不阻断其它图片
+- RAG 检索失败降级为空上下文，不阻断文章生成
 
 ### 系统性能特性
 
 - **并行处理**：配图生成采用线程池并行执行
-- **多级缓存**：基于Redis的缓存策略，降低数据库压力
 - **连接池优化**：HikariCP连接池配置，支持高并发访问
-- **异步非阻塞**：响应式编程模型，确保系统高可用性
+- **异步执行**：文章阶段任务和文档索引任务均通过线程池异步执行
 
 ## 🔧 系统扩展指南
 
@@ -580,21 +592,3 @@ service:
 - 基于Spring注解的自动配置
 - 服务映射和策略选择器集成
 - 支持热插拔和动态加载
-
-### 扩展RAG知识库
-
-#### 1. 文档向量化处理
-
-添加文档到RAG知识库的流程：
-- **文本预处理**：清洗和标准化输入内容
-- **向量嵌入**：使用Embedding模型生成向量表示
-- **元数据关联**：绑定内容类型和相关信息
-- **向量存储**：保存到PGVector数据库
-
-#### 2. 相似文档检索
-
-实现基于向量的相似度搜索：
-- 查询向量化和相似度计算
-- 支持Top-K结果检索
-- 可配置的相似度阈值过滤
-- 多维度结果排序和筛选
