@@ -125,6 +125,30 @@ public class Article implements Serializable {
     private String images;
 
     /**
+     * Image review results.
+     */
+    @Column("image_review_results")
+    private String imageReviewResults;
+
+    /**
+     * Image execution traces.
+     */
+    @Column("image_execution_traces")
+    private String imageExecutionTraces;
+
+    /**
+     * User image intents captured before outline confirmation.
+     */
+    @Column("outline_image_intents")
+    private String outlineImageIntents;
+
+    /**
+     * Pending or historical image revision candidates.
+     */
+    @Column("pending_image_revisions")
+    private String pendingImageRevisions;
+
+    /**
      * 状态：PENDING/PROCESSING/COMPLETED/FAILED
      */
     private String status;

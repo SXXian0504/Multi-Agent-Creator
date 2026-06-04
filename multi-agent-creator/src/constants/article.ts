@@ -34,6 +34,18 @@ export const STATUS_COLOR_MAP: Record<string, string> = {
   [ArticleStatus.FAILED]: '#EF4444',
 }
 
+export enum ArticlePhase {
+  IMAGE_WAITING_USER_REVISION = 'IMAGE_WAITING_USER_REVISION',
+  IMAGE_REVISING = 'IMAGE_REVISING',
+  IMAGE_WAITING_USER_CONFIRM = 'IMAGE_WAITING_USER_CONFIRM',
+}
+
+export const PHASE_TEXT_MAP: Record<string, string> = {
+  [ArticlePhase.IMAGE_WAITING_USER_REVISION]: '等待修订配图',
+  [ArticlePhase.IMAGE_REVISING]: '修订配图中',
+  [ArticlePhase.IMAGE_WAITING_USER_CONFIRM]: '等待确认配图',
+}
+
 // 文章创作相关
 export const MAX_TOPIC_LENGTH = 500
 export const DEFAULT_TOTAL_IMAGES = 5

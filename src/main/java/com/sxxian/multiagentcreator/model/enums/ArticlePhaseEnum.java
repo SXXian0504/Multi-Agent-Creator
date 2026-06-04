@@ -31,6 +31,9 @@ public enum ArticlePhaseEnum {
     IMAGE_EXECUTING("IMAGE_EXECUTING", "图片工具执行中"),
     IMAGE_REVIEWING("IMAGE_REVIEWING", "图片结果评审中"),
     IMAGE_REPLANNING("IMAGE_REPLANNING", "图片结果未通过，重新规划中"),
+    IMAGE_WAITING_USER_REVISION("IMAGE_WAITING_USER_REVISION", "Waiting for user image revision prompt"),
+    IMAGE_REVISING("IMAGE_REVISING", "Revising image"),
+    IMAGE_WAITING_USER_CONFIRM("IMAGE_WAITING_USER_CONFIRM", "Waiting for user image confirmation"),
 
     MERGING("MERGING", "图文合成中"),
     COMPLETED("COMPLETED", "全流程完成"),
@@ -129,10 +132,22 @@ public enum ArticlePhaseEnum {
                     || targetPhase == MERGING
                     || targetPhase == FAILED;
             case IMAGE_REVIEWING -> targetPhase == IMAGE_REPLANNING
+                    || targetPhase == IMAGE_WAITING_USER_REVISION
                     || targetPhase == MERGING
                     || targetPhase == FAILED;
             case IMAGE_REPLANNING -> targetPhase == IMAGE_PLANNING
                     || targetPhase == IMAGE_EXECUTING
+                    || targetPhase == IMAGE_REVIEWING
+                    || targetPhase == IMAGE_WAITING_USER_REVISION
+                    || targetPhase == FAILED;
+            case IMAGE_WAITING_USER_REVISION -> targetPhase == IMAGE_REVISING
+                    || targetPhase == FAILED;
+            case IMAGE_REVISING -> targetPhase == IMAGE_REVIEWING
+                    || targetPhase == IMAGE_WAITING_USER_CONFIRM
+                    || targetPhase == IMAGE_WAITING_USER_REVISION
+                    || targetPhase == FAILED;
+            case IMAGE_WAITING_USER_CONFIRM -> targetPhase == IMAGE_REVISING
+                    || targetPhase == MERGING
                     || targetPhase == FAILED;
             case MERGING -> targetPhase == COMPLETED || targetPhase == FAILED;
             case COMPLETED, FAILED -> false;

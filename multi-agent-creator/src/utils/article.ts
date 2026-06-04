@@ -1,7 +1,7 @@
 /**
  * 文章相关工具函数
  */
-import { STATUS_TEXT_MAP, STATUS_TAG_COLOR_MAP, STATUS_COLOR_MAP } from '@/constants/article'
+import { PHASE_TEXT_MAP, STATUS_TEXT_MAP, STATUS_TAG_COLOR_MAP, STATUS_COLOR_MAP } from '@/constants/article'
 
 /**
  * 获取状态文本
@@ -9,6 +9,17 @@ import { STATUS_TEXT_MAP, STATUS_TAG_COLOR_MAP, STATUS_COLOR_MAP } from '@/const
  */
 export const getStatusText = (status: string): string => {
   return STATUS_TEXT_MAP[status] || status
+}
+
+export const getPhaseText = (phase?: string): string => {
+  if (!phase) {
+    return ''
+  }
+  return PHASE_TEXT_MAP[phase] || phase
+}
+
+export const getArticleDisplayStatusText = (status: string, phase?: string): string => {
+  return getPhaseText(phase) || getStatusText(status)
 }
 
 /**

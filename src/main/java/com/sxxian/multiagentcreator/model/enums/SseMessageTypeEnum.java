@@ -65,6 +65,13 @@ public enum SseMessageTypeEnum {
      */
     REVIEW_COMPLETE("REVIEW_COMPLETE", "阶段评审完成"),
 
+    IMAGE_REVISION_REQUIRED("IMAGE_REVISION_REQUIRED", "Image revision required"),
+    IMAGE_REVISION_STARTED("IMAGE_REVISION_STARTED", "Image revision started"),
+    IMAGE_REVISION_COMPLETE("IMAGE_REVISION_COMPLETE", "Image revision complete"),
+    IMAGE_REVISION_ACCEPTED("IMAGE_REVISION_ACCEPTED", "Image revision accepted"),
+    OUTLINE_IMAGE_INTENT_SAVED("OUTLINE_IMAGE_INTENT_SAVED", "Outline image intent saved"),
+    OUTLINE_IMAGE_INTENT_REMOVED("OUTLINE_IMAGE_INTENT_REMOVED", "Outline image intent removed"),
+
     /**
      * 全部完成
      */

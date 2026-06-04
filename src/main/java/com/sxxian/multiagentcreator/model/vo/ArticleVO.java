@@ -1,6 +1,10 @@
 package com.sxxian.multiagentcreator.model.vo;
 
 import com.google.gson.reflect.TypeToken;
+import com.sxxian.multiagentcreator.model.dto.article.ArticleState;
+import com.sxxian.multiagentcreator.model.dto.article.ImageRevisionCandidate;
+import com.sxxian.multiagentcreator.model.dto.article.OutlineImageIntent;
+import com.sxxian.multiagentcreator.model.dto.review.ImageReviewResult;
 import com.sxxian.multiagentcreator.model.entity.Article;
 import com.sxxian.multiagentcreator.utils.GsonUtils;
 import lombok.Data;
@@ -94,6 +98,14 @@ public class ArticleVO implements Serializable {
      */
     private List<ImageItem> images;
 
+    private List<ImageReviewResult> imageReviewResults;
+
+    private List<ArticleState.ImageExecutionTrace> imageExecutionTraces;
+
+    private List<OutlineImageIntent> outlineImageIntents;
+
+    private List<ImageRevisionCandidate> pendingImageRevisions;
+
     /**
      * 状态
      */
@@ -177,6 +189,22 @@ public class ArticleVO implements Serializable {
         if (article.getImages() != null) {
             articleVO.setImages(GsonUtils.fromJson(article.getImages(),
                     new TypeToken<List<ImageItem>>(){}));
+        }
+        if (article.getImageReviewResults() != null) {
+            articleVO.setImageReviewResults(GsonUtils.fromJson(article.getImageReviewResults(),
+                    new TypeToken<List<ImageReviewResult>>(){}));
+        }
+        if (article.getImageExecutionTraces() != null) {
+            articleVO.setImageExecutionTraces(GsonUtils.fromJson(article.getImageExecutionTraces(),
+                    new TypeToken<List<ArticleState.ImageExecutionTrace>>(){}));
+        }
+        if (article.getOutlineImageIntents() != null) {
+            articleVO.setOutlineImageIntents(GsonUtils.fromJson(article.getOutlineImageIntents(),
+                    new TypeToken<List<OutlineImageIntent>>(){}));
+        }
+        if (article.getPendingImageRevisions() != null) {
+            articleVO.setPendingImageRevisions(GsonUtils.fromJson(article.getPendingImageRevisions(),
+                    new TypeToken<List<ImageRevisionCandidate>>(){}));
         }
 
         return articleVO;
